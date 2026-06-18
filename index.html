@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robes of Black</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-main: #e0e0e0;
+            --accent-green: #90d463; 
+            --accent-purple: #7a3898; 
+            --sidebar-bg: #111111;
+            --sidebar-width: 250px;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Floating Header */
+        #floating-header {
+            background-color: var(--accent-purple);
+            color: white;
+            text-align: center;
+            padding: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: none; /* Hidden by default until loaded */
+            z-index: 1000;
+        }
+
+        /* App Layout */
+        .app-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar Navigation */
+        aside.sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--sidebar-bg);
+            border-right: 2px solid var(--accent-purple);
+            display: flex;
+            flex-direction: column;
+            padding: 2rem 0;
+            z-index: 100;
+        }
+
+        .brand-logo {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 0 1.5rem;
+        }
+
+        .brand-logo img {
+            width: 100%;
+            filter: drop-shadow(0 0 10px rgba(144, 212, 99, 0.2));
+            transition: content 0.3s;
+        }
+
+        .nav-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            flex-grow: 1;
+        }
+
+        .nav-links a {
+            display: block;
+            padding: 1.2rem 2rem;
+            color: var(--text-main);
+            text-decoration: none;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 1px;
+            border-left: 4px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .nav-links a:hover, .nav-links a.active {
+            background-color: #1a1a1a;
+            border-left-color: var(--accent-green);
+            color: var(--accent-green);
+            text-shadow: 0 0 10px rgba(144, 212, 99, 0.4);
+        }
+
+        .portal-link {
+            padding: 1rem 2rem;
+            font-size: 0.85rem;
+            border-top: 1px solid #222;
+        }
+        
+        .portal-link a {
+            color: #666;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.3s;
+        }
+        .portal-link a:hover { color: var(--accent-purple); }
+
+        /* Main Content Area */
+        main.content {
+            flex-grow: 1;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            background: radial-gradient(circle at center, #1a1a1a 0%, var(--bg-color) 100%);
+        }
+
+        /* SPA Views */
+        .view-section {
+            display: none;
+            padding: 4rem 3rem;
+            max-width: 1000px;
+            margin: 0 auto;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .view-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2.section-title {
+            color: var(--accent-green);
+            border-bottom: 1px solid var(--accent-purple);
+            padding-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 0;
+            margin-bottom: 2rem;
+        }
+
+        /* Hero / About Section */
+        .hero { text-align: center; margin-bottom: 3rem; }
+        .hero img { max-width: 40%; filter: drop-shadow(0 0 30px rgba(122, 56, 152, 0.3)); }
+        #about-content { line-height: 1.8; font-size: 1.1rem; color: #ccc; white-space: pre-wrap; }
+
+        /* Events List */
+        .event-list { list-style: none; padding: 0; }
+        .event-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            background: #111;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--accent-green);
+            border-radius: 0 4px 4px 0;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        .event-item:hover { transform: translateX(8px); border-left-color: var(--accent-purple); background: #151515; }
+        .event-date { font-weight: bold; color: var(--accent-green); font-size: 1.1rem; min-width: 120px; }
+        .event-venue { font-weight: 600; font-size: 1.2rem; flex-grow: 1; padding: 0 1rem; }
+        .event-venue a { color: var(--text-main); text-decoration: underline; text-decoration-color: var(--accent-purple); transition: color 0.2s; }
+        .event-venue a:hover { color: var(--accent-purple); }
+        .event-location { color: #888; text-align: right; }
+
+        /* Merch Grid */
+        .merch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+        .merch-card {
+            background: #111;
+            border-top: 3px solid var(--accent-purple);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .merch-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            border-top-color: var(--accent-green);
+        }
+        .merch-card img { width: 100%; height: 250px; object-fit: cover; border-radius: 4px; margin-bottom: 1rem; }
+        .merch-card h3 { margin: 0 0 0.5rem 0; color: var(--accent-green); font-size: 1.2rem; }
+        .merch-card .price { font-size: 1.3rem; font-weight: bold; color: white; margin-bottom: 1rem; }
+        .merch-card p { font-size: 0.9rem; color: #aaa; margin-bottom: 1.5rem; min-height: 60px; }
+        .btn-buy {
+            display: inline-block;
+            background: var(--accent-purple);
+            color: white;
+            text-decoration: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: background 0.3s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .btn-buy:hover { background: #5c2775; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-container { flex-direction: column; }
+            aside.sidebar { width: 100%; padding: 1rem 0; flex-direction: row; align-items: center; border-right: none; border-bottom: 2px solid var(--accent-purple); }
+            .brand-logo { margin-bottom: 0; padding: 0 1rem; width: 120px; }
+            .nav-links { display: flex; justify-content: space-around; }
+            .nav-links a { padding: 0.5rem 1rem; border-left: none; border-bottom: 3px solid transparent; }
+            .nav-links a:hover, .nav-links a.active { border-left-color: transparent; border-bottom-color: var(--accent-green); }
+            .portal-link { display: none; }
+            .event-item { flex-direction: column; align-items: flex-start; text-align: left; }
+            .event-venue { padding: 0.5rem 0; }
+            .event-location { text-align: left; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="floating-header"></div>
+
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="brand-logo">
+                <img id="site-logo" src="logo.png" alt="Robes of Black">
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" data-target="view-home" class="active">Home</a></li>
+                <li><a href="#" data-target="view-tour">Tour</a></li>
+                <li><a href="#" data-target="view-merch">Merch</a></li>
+                <li><a href="#" data-target="view-contact">Contact</a></li>
+            </ul>
+            <div class="portal-link">
+                <a href="portal.html">Crew Login &rarr;</a>
+            </div>
+        </aside>
+
+        <main class="content">
+            <section id="view-home" class="view-section active">
+                <div class="hero">
+                    <img id="hero-logo" src="logo.png" alt="Robes of Black">
+                </div>
+                <div>
+                    <h2 class="section-title">The Void Beckons</h2>
+                    <div id="about-content">Summoning the darkness...</div>
+                </div>
+            </section>
+
+            <section id="view-tour" class="view-section">
+                <h2 class="section-title">Upcoming Rituals</h2>
+                <ul class="event-list" id="tour-list">
+                    <p style="color: #888;">Scrying for dates...</p>
+                </ul>
+            </section>
+
+            <section id="view-merch" class="view-section">
+                <h2 class="section-title">Artifacts</h2>
+                <div class="merch-grid" id="merch-list">
+                    <p style="color: #888;">Unearthing relics...</p>
+                </div>
+            </section>
+
+            <section id="view-contact" class="view-section">
+                <h2 class="section-title">Reach the Void</h2>
+                <div style="background: #111; padding: 2rem; border-top: 3px solid var(--accent-purple); border-radius: 8px;">
+                    <p style="color: #aaa; margin-bottom: 2rem;">Send us a message or submit your audition tape.</p>
+                    <form id="contact-form">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; color: #888; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.85rem;">Name</label>
+                            <input type="text" id="contact-name" required style="width: 100%; padding: 0.75rem; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 4px; box-sizing: border-box;">
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; color: #888; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.85rem;">Email</label>
+                            <input type="email" id="contact-email" required style="width: 100%; padding: 0.75rem; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 4px; box-sizing: border-box;">
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; color: #888; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.85rem;">Message / Audition Details</label>
+                            <textarea id="contact-message" rows="4" required style="width: 100%; padding: 0.75rem; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 4px; box-sizing: border-box;"></textarea>
+                        </div>
+                        <div style="margin-bottom: 2rem;">
+                            <label style="display: block; color: #888; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.85rem;">Upload File (Max 100MB)</label>
+                            <input type="file" id="contact-file" accept="video/*,audio/*,.pdf,.doc,.docx" style="color: white;">
+                        </div>
+                        
+                        <button type="submit" id="contact-submit-btn" class="btn-buy" style="border: none; cursor: pointer;">Send Message</button>
+                        <div id="contact-status" style="margin-top: 1rem; font-weight: bold; color: var(--accent-green);"></div>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>
