@@ -8,6 +8,10 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <style>
         body { background-color: #0f172a; color: white; font-family: system-ui, sans-serif; }
     </style>
@@ -82,16 +86,29 @@
     <script>
         // --- 1. FIREBASE CONFIGURATION (PASTE YOUR KEYS HERE!) ---
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_MESSAGING_ID",
-            appId: "YOUR_APP_ID"
+          apiKey: "AIzaSyC6O1g78_kcpKI0HMks7p5zeUolW2TP5hI",
+          authDomain: "gamezone-c3f85.firebaseapp.com",
+          projectId: "gamezone-c3f85",
+          storageBucket: "gamezone-c3f85.firebasestorage.app",
+          messagingSenderId: "326288966720",
+          appId: "1:326288966720:web:444c01b9dcafd25a090ba5",
+          measurementId: "G-GJ5ZW0BW3S"
         };
         
         firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        
+        // Prompt for login when you open the page
+        auth.onAuthStateChanged(user => {
+            if (!user) {
+                const email = prompt("Admin Email:");
+                const pass = prompt("Admin Password:");
+                auth.signInWithEmailAndPassword(email, pass)
+                    .then(() => alert("Admin authenticated!"))
+                    .catch(err => { alert("Login failed: " + err.message); location.reload(); });
+            }
+        });
+
         const db = firebase.database();
         document.getElementById('db-status').textContent = "Connected";
 
