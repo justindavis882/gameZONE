@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gameZONE | Cloud Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        body { background-color: #0f172a; color: white; font-family: system-ui, sans-serif; }
+    </style>
+</head>
+<body class="min-h-screen p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex justify-between items-center mb-10 border-b border-slate-700 pb-6">
+            <div>
+                <h1 class="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-500 to-lime-400">
+                    game<span class="text-white">ZONE</span> <span class="text-2xl font-normal text-gray-400 tracking-normal ml-2">Cloud Admin</span>
+                </h1>
+            </div>
+            <div class="bg-lime-500/20 text-lime-400 border border-lime-500/50 px-4 py-2 rounded-lg font-bold text-sm tracking-widest uppercase flex items-center space-x-2">
+                <i class="fa-solid fa-server"></i><span id="db-status">Connecting...</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl h-fit">
+                <h2 class="text-xl font-bold text-fuchsia-500 mb-6 uppercase tracking-widest border-b border-slate-700 pb-2"><i class="fa-solid fa-plus mr-2"></i>Publish New App</h2>
+                
+                <form id="add-app-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Unique App ID (No spaces)</label>
+                        <input type="text" id="app-id" required placeholder="e.g. minecraft_web" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Display Title</label>
+                        <input type="text" id="app-title" required placeholder="Minecraft Classic" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">App Type</label>
+                        <select id="app-type" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500" onchange="toggleExecField()">
+                            <option value="web">PWA / Web App</option>
+                            <option value="native">Native Linux App</option>
+                        </select>
+                    </div>
+                    <div id="url-container">
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Web URL</label>
+                        <input type="url" id="app-url" placeholder="https://classic.minecraft.net/" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500">
+                    </div>
+                    <div id="exec-container" class="hidden">
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Linux Exec Command</label>
+                        <input type="text" id="app-exec" placeholder="flatpak run net.minecraft.Minecraft" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Icon URL</label>
+                        <input type="url" id="app-icon" required placeholder="https://link-to-icon.png" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Description</label>
+                        <textarea id="app-desc" required rows="2" placeholder="A short description for the store..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-fuchsia-500"></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-4 rounded-xl mt-4 transition-colors shadow-lg">
+                        PUBLISH TO STORE
+                    </button>
+                </form>
+            </div>
+
+            <div class="lg:col-span-2">
+                <h2 class="text-xl font-bold text-lime-400 mb-6 uppercase tracking-widest border-b border-slate-700 pb-2"><i class="fa-solid fa-database mr-2"></i>Live Store Catalog</h2>
+                <div id="admin-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="text-gray-500 font-mono">Loading database...</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- 1. FIREBASE CONFIGURATION (PASTE YOUR KEYS HERE!) ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        document.getElementById('db-status').textContent = "Connected";
+
+        // --- 2. FORM LOGIC ---
+        function toggleExecField() {
+            const type = document.getElementById('app-type').value;
+            if (type === 'web') {
+                document.getElementById('url-container').classList.remove('hidden');
+                document.getElementById('exec-container').classList.add('hidden');
+                document.getElementById('app-url').required = true;
+                document.getElementById('app-exec').required = false;
+            } else {
+                document.getElementById('url-container').classList.add('hidden');
+                document.getElementById('exec-container').classList.remove('hidden');
+                document.getElementById('app-url').required = false;
+                document.getElementById('app-exec').required = true;
+            }
+        }
+
+        document.getElementById('add-app-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('app-id').value.trim().toLowerCase();
+            const type = document.getElementById('app-type').value;
+            
+            const appData = {
+                title: document.getElementById('app-title').value,
+                type: type,
+                icon: document.getElementById('app-icon').value,
+                description: document.getElementById('app-desc').value
+            };
+
+            if (type === 'web') appData.url = document.getElementById('app-url').value;
+            if (type === 'native') appData.exec = document.getElementById('app-exec').value;
+
+            try {
+                await db.ref('apps/' + id).set(appData);
+                alert('App successfully published to gameZONE!');
+                document.getElementById('add-app-form').reset();
+                toggleExecField();
+            } catch (error) {
+                alert('Error publishing app: ' + error.message);
+            }
+        });
+
+        // --- 3. LIVE CATALOG RENDERING ---
+        db.ref('apps').on('value', (snapshot) => {
+            const data = snapshot.val();
+            const grid = document.getElementById('admin-grid');
+            grid.innerHTML = '';
+
+            if (!data) {
+                grid.innerHTML = '<div class="text-gray-500 font-mono">Store is currently empty.</div>';
+                return;
+            }
+
+            Object.keys(data).forEach(key => {
+                const app = data[key];
+                const div = document.createElement('div');
+                div.className = 'bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col justify-between';
+                
+                const targetPath = app.type === 'web' ? app.url : app.exec;
+
+                div.innerHTML = `
+                    <div class="flex items-start space-x-4 mb-4">
+                        <img src="${app.icon}" class="w-12 h-12 rounded object-cover border border-white/10" onerror="this.src='https://via.placeholder.com/150'">
+                        <div>
+                            <h3 class="font-bold text-white">${app.title}</h3>
+                            <p class="text-[10px] text-fuchsia-400 font-mono">ID: ${key} | TYPE: ${app.type.toUpperCase()}</p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 font-mono truncate mb-4 bg-slate-900 p-2 rounded">${targetPath}</p>
+                    <button onclick="deleteApp('${key}', '${app.title}')" class="bg-red-950/50 hover:bg-red-600 text-red-400 hover:text-white border border-red-900 font-bold py-2 rounded text-sm transition-colors w-full">
+                        <i class="fa-solid fa-trash mr-2"></i>DELETE APP
+                    </button>
+                `;
+                grid.appendChild(div);
+            });
+        });
+
+        // --- 4. DELETE LOGIC ---
+        window.deleteApp = async (id, title) => {
+            if (confirm(`Are you absolutely sure you want to remove ${title} from the store?`)) {
+                try {
+                    await db.ref('apps/' + id).remove();
+                } catch (error) {
+                    alert('Error removing app: ' + error.message);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
