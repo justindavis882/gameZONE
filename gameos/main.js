@@ -9,7 +9,9 @@ const os = require('os');
 const https = require('https');
 
 // Define the current local version of the OS
-const CURRENT_OS_VERSION = "1.1.2";
+const CURRENT_OS_VERSION = "1.1.3";
+// Updated location for recent.png. Should fix not appearing on some consoles.
+// 
 
 // --- 1. BOOT THE BACKEND SERVER ---
 const expressApp = express();
