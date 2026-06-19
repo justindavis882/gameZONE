@@ -9,7 +9,7 @@ const os = require('os');
 const https = require('https');
 
 // Define the current local version of the OS
-const CURRENT_OS_VERSION = "1.1";
+const CURRENT_OS_VERSION = "1.1.2";
 
 // --- 1. BOOT THE BACKEND SERVER ---
 const expressApp = express();
