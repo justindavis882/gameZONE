@@ -1,0 +1,4 @@
+{
+  "version": "1.1",
+  "url": "https://github.com/justindavis882/gameZONE/archive/refs/heads/main.zip",
+  "notes": "Added update checking functionality. Now the OS can check a remote version file to see if an update is available. If the version in the file is higher than the current OS version, it will notify the user that an update is available."

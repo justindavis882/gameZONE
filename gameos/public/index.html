@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+
+    <style>
+        :root { --brand-color: #0ea5e9; }
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; overflow: hidden; user-select: none; -webkit-user-select: none; }
+        #dynamic-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; transition: background-image 0.5s ease-in-out, opacity 0.5s ease-in-out, filter 0.5s ease-in-out; z-index: 0; }
+        #app-container { position: relative; z-index: 10; height: 100vh; display: flex; flex-direction: column; background: radial-gradient(circle at 50% 0%, rgba(15, 23, 42, 0.1) 0%, rgba(2, 6, 23, 0.6) 100%); }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+        .focusable { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border: 2px solid transparent; outline: none; cursor: pointer; }
+        .focusable:hover, .focusable.focused { transform: scale(1.05); box-shadow: 0 0 25px rgba(14, 165, 233, 0.5); z-index: 20; }
+        .nav-item.focused { background-color: rgba(255,255,255,0.1); color: var(--brand-color); border-left: 4px solid var(--brand-color); transform: none; box-shadow: none; }
+        @keyframes slideUpFade { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-enter { animation: slideUpFade 0.4s ease-out forwards; }
+        @keyframes pulseGlow { 0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(14, 165, 233, 0); } 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); } }
+        .launching-glow { animation: pulseGlow 1.5s infinite; }
+    </style>
+</head>
+<body>
+    <div id="boot-sequence" class="fixed inset-0 bg-black z-[99999] flex flex-col items-center justify-center transition-opacity duration-1000">
+        <div id="boot-logo" class="scale-0 opacity-0 transition-all duration-[1500ms] ease-out flex flex-col items-center">
+            <div class="w-40 h-40 rounded-full border-[6px] border-lime-400 shadow-[0_0_80px_rgba(74,222,128,0.6)] flex items-center justify-center mb-6 relative overflow-hidden">
+                <div class="absolute inset-0 bg-fuchsia-600 animate-pulse opacity-40"></div>
+                <i class="fa-solid fa-gamepad text-7xl text-white z-10 drop-shadow-[0_0_15px_rgba(255,255,255,1)]"></i>
+            </div>
+            <h1 class="text-7xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-500 to-lime-400 drop-shadow-[0_0_30px_rgba(217,70,239,0.8)]">
+                game<span class="text-white">ZONE</span>
+            </h1>
+        </div>
+    </div>
+    <div id="toast-container" class="fixed top-8 right-8 z-[500] flex flex-col space-y-4 pointer-events-none"></div>
+    <div id="os-cursor" class="fixed pointer-events-none z-[9000] border-[3px] border-lime-400 rounded-2xl transition-all duration-200 ease-out opacity-0 shadow-[0_0_20px_rgba(217,70,239,0.8)] box-border"></div>
+    <div id="virtual-mouse" class="fixed z-[9999] pointer-events-none hidden transition-none ml-[-4px] mt-[-4px]">
+        <i class="fa-solid fa-arrow-pointer text-white text-2xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]" style="-webkit-text-stroke: 1.5px black;"></i>
+    </div>
+    <div id="dynamic-bg"></div>
+    <div id="screensaver-overlay" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[9999] hidden flex-col items-center justify-center transition-opacity duration-1000 opacity-0 pointer-events-none">
+        <div id="screensaver-clock" class="text-[8rem] font-black tracking-widest text-white/50 drop-shadow-2xl">12:00 PM</div>
+        <div class="text-fuchsia-500/50 mt-4 tracking-[0.5em] text-xl font-bold uppercase">System Standby</div>
+    </div>
+
+    <div id="app-container">
+        <header class="flex justify-between items-center p-6 w-full">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-fuchsia-500 to-indigo-600 flex items-center justify-center border-2 border-white/20 shadow-lg"><i class="fa-solid fa-user text-xl"></i></div>
+                <div><h1 class="text-xl font-bold tracking-wider">game<span class="text-lime-400">ZONE</span></h1><p class="text-xs text-lime-400 font-semibold" id="network-status">ONLINE</p></div>
+            </div>
+            <div class="flex items-center space-x-6 text-gray-300">
+                <i class="fa-solid fa-wifi text-xl"></i>
+                <i class="fa-solid fa-battery-full text-xl"></i>
+                <div id="clock" class="text-2xl font-light tracking-widest bg-white/5 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10">12:00 PM</div>
+            </div>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden">
+            <nav class="w-64 flex flex-col justify-center space-y-2 p-6 border-r border-white/10">
+                <button class="nav-item focusable focused text-left px-6 py-4 rounded-xl text-lg font-semibold text-gray-400 hover:text-white transition-colors flex items-center space-x-4" data-view="home" tabindex="0"><i class="fa-solid fa-house w-6 text-center"></i><span>Home</span></button>
+                <button class="nav-item focusable text-left px-6 py-4 rounded-xl text-lg font-semibold text-gray-400 hover:text-white transition-colors flex items-center space-x-4" data-view="library" tabindex="0"><i class="fa-solid fa-gamepad w-6 text-center"></i><span>Library</span></button>
+                <button class="nav-item focusable text-left px-6 py-4 rounded-xl text-lg font-semibold text-gray-400 hover:text-white transition-colors flex items-center space-x-4" data-view="browser" tabindex="0"><i class="fa-solid fa-globe w-6 text-center"></i><span>Web Browser</span></button>
+                <button class="nav-item focusable text-left px-6 py-4 rounded-xl text-lg font-semibold text-gray-400 hover:text-white transition-colors flex items-center space-x-4" data-view="media" tabindex="0">
+                    <i class="fa-solid fa-image w-6 text-center"></i><span>Media</span>
+                </button>
+                <button class="nav-item focusable text-left px-6 py-4 rounded-xl text-lg font-semibold text-gray-400 hover:text-white transition-colors flex items-center space-x-4" data-view="store" tabindex="0">
+                    <i class="fa-solid fa-store w-6 text-center text-fuchsia-500"></i><span>App Store</span>
+                </button>
+                <button class="nav-item focusable text-left px-6 py-4 rounded-xl text-lg font-semibold text-gray-400 hover:text-white transition-colors flex items-center space-x-4" data-view="settings" tabindex="0"><i class="fa-solid fa-gear w-6 text-center"></i><span>Settings</span></button>
+            </nav>
+
+            <main class="flex-1 relative overflow-y-auto overflow-x-hidden p-10" id="main-content">
+                
+                <div id="view-home" class="view-section h-full flex flex-col">
+                    <div class="mb-4 text-lime-400 font-bold tracking-widest text-sm uppercase">Recently Used Apps</div>
+                    <div id="featured-game" class="relative w-full h-80 rounded-2xl overflow-hidden focusable group mb-10 shadow-2xl" tabindex="0">
+                        <img src="https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Featured">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+                        <div class="absolute bottom-0 left-0 p-8 w-full">
+                            <div class="flex justify-between items-end">
+                                <div>
+                                    <span class="bg-fuchsia-600 text-white text-xs font-bold px-3 py-1 rounded-full mb-3 inline-block shadow-lg">System Dashboard</span>
+                                    <h2 class="text-5xl font-black text-white mb-2 drop-shadow-lg">Loading Library...</h2>
+                                </div>
+                                <div class="bg-white text-black font-bold px-8 py-3 rounded-xl flex items-center space-x-2 group-hover:bg-fuchsia-500 group-hover:text-white transition-colors">
+                                    <i class="fa-solid fa-play"></i><span>PLAY NOW</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-4 text-lime-400 font-bold tracking-widest text-sm uppercase">System Apps</div>
+                    <div class="flex space-x-6 overflow-x-visible pb-8" id="recent-games-container"></div>
+                </div>
+
+                <div id="view-library" class="view-section hidden h-full flex flex-col">
+                    <div class="flex justify-between items-end mb-8"><h2 class="text-4xl font-bold">All Games & Apps</h2></div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-20" id="library-grid"></div>
+                </div>
+
+                <div id="view-browser" class="view-section hidden h-full flex flex-col items-center justify-center text-center">
+                    <i class="fa-solid fa-earth-americas text-6xl text-fuchsia-500 mb-6 drop-shadow-[0_0_15px_rgba(217,70,239,0.5)]"></i>
+                    <h2 class="text-4xl font-bold mb-4">Web Portal</h2>
+                    <p class="text-gray-400 mb-8 max-w-lg">Launch the full Chrome browser overlay seamlessly.</p>
+                    <button class="focusable bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-4 px-8 rounded-xl flex items-center space-x-3 shadow-lg shadow-sky-900/50" onclick="openWebGame('https://google.com')">
+                        <i class="fa-brands fa-chrome text-xl" tabindex="0"></i><span>Launch Chrome</span>
+                    </button>
+                </div>
+                
+                <div id="view-store" class="view-section hidden h-full flex flex-col">
+                    <div class="flex justify-between items-end mb-8">
+                        <div>
+                            <h2 class="text-4xl font-bold mb-2">Digital Native Store</h2>
+                            <p class="text-gray-400">Discover and install curated apps and games.</p>
+                        </div>
+                        <div class="bg-fuchsia-600/20 text-fuchsia-400 border border-fuchsia-500/50 px-4 py-2 rounded-lg font-bold text-sm tracking-widest uppercase flex items-center space-x-2">
+                            <i class="fa-solid fa-cloud-arrow-down"></i><span>Cloud Sync Active</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20" id="store-grid">
+                        <div class="text-center text-gray-500 py-12 font-mono col-span-full">Connecting to Firebase...</div>
+                    </div>
+                </div>
+
+                <div id="view-settings" class="view-section hidden h-full">
+                    <h2 class="text-4xl font-bold mb-8">System Configuration</h2>
+                    <div class="space-y-4 max-w-2xl">
+                        <div class="focusable bg-white/5 p-6 rounded-2xl border border-white/10 flex justify-between items-center hover:bg-white/10" onclick="openNetworkChooser()" tabindex="0">
+                            <div><h3 class="text-xl font-semibold">Network</h3><p class="text-lime-400 text-sm font-bold" id="ui-network-name">Checking connection...</p></div><i class="fa-solid fa-wifi text-gray-500"></i>
+                        </div>
+                        <div class="focusable bg-white/5 p-6 rounded-2xl border border-white/10 flex justify-between items-center hover:bg-white/10" onclick="openBluetoothChooser()" tabindex="0">
+                            <div><h3 class="text-xl font-semibold">Bluetooth</h3><p class="text-lime-400 text-sm font-bold" id="ui-bluetooth-status">Checking...</p></div><i class="fa-brands fa-bluetooth-b text-fuchsia-500 text-xl"></i>
+                        </div>
+                        <div class="focusable bg-white/5 p-6 rounded-2xl border border-white/10 flex flex-col justify-center hover:bg-white/10" tabindex="0">
+                            <div class="flex justify-between items-center mb-4"><h3 class="text-xl font-semibold">System Volume</h3><i class="fa-solid fa-volume-high text-gray-500"></i></div>
+                            <input type="range" id="sys-volume" min="0" max="100" value="50" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-lime-400">
+                        </div>
+                        
+                        <div class="focusable bg-white/5 p-6 rounded-2xl border border-white/10 flex justify-between items-center hover:bg-white/10 mt-4" onclick="openThemeChooser()" tabindex="0">
+                            <div><h3 class="text-xl font-semibold">Personalization</h3><p class="text-lime-400 text-sm font-bold" id="ui-theme-status">Dynamic App Art</p></div><i class="fa-solid fa-palette text-lime-400 text-xl"></i>
+                        </div>
+                        <div class="focusable bg-white/5 p-6 rounded-2xl border border-white/10 flex justify-between items-center hover:bg-white/10 mt-4" onclick="checkSystemUpdate()" tabindex="0">
+                            <div>
+                                <h3 class="text-xl font-semibold">OS Updater</h3>
+                                <p class="text-fuchsia-400 text-sm font-bold" id="ui-update-status">Check for updates</p>
+                            </div>
+                            <i class="fa-solid fa-cloud-arrow-down text-fuchsia-500 text-xl"></i>
+                        </div>
+                        <div class="focusable bg-white/5 p-6 rounded-2xl border border-white/10 flex justify-between items-center hover:bg-white/10" onclick="closeGameOS()" tabindex="0">
+                            <div><h3 class="text-xl font-semibold text-orange-400">Exit to Desktop</h3><p class="text-gray-400 text-sm">Close OS and return to Linux Mint</p></div><i class="fa-solid fa-door-open text-orange-400 text-xl"></i>
+                        </div>
+                        <div class="focusable bg-white/5 p-6 rounded-2xl border border-white/10 flex justify-between items-center hover:bg-white/10" onclick="restartSystem()" tabindex="0">
+                            <div><h3 class="text-xl font-semibold text-red-400">Restart System</h3><p class="text-gray-400 text-sm">Reboot Console</p></div><i class="fa-solid fa-rotate text-red-400 text-xl"></i>
+                        </div>
+                        <div class="focusable bg-white/5 p-6 rounded-2xl border border-white/10 flex justify-between items-center hover:bg-white/10" onclick="shutdownSystem()" tabindex="0">
+                            <div><h3 class="text-xl font-semibold text-red-600">Power Off</h3><p class="text-gray-400 text-sm">Completely shut down hardware</p></div><i class="fa-solid fa-power-off text-red-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-media" class="view-section hidden h-full flex flex-col">
+                    <div class="flex justify-between items-end mb-8">
+                        <div>
+                            <h2 class="text-4xl font-bold mb-2">File Manager</h2>
+                            <div class="flex items-center space-x-3 text-sm font-mono text-lime-400 bg-white/5 px-4 py-2 rounded-lg border border-white/10 w-fit">
+                                <i class="fa-solid fa-hard-drive"></i>
+                                <span>Host Storage:</span>
+                                <span id="storage-readout" class="text-white font-bold">Scanning...</span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-4">
+                            <button class="focusable bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-3 px-6 rounded-xl flex items-center space-x-3 shadow-lg" onclick="openCamera()" tabindex="0">
+                                <i class="fa-solid fa-camera text-xl"></i><span>Camera</span>
+                            </button>
+                            <button class="focusable bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl flex items-center space-x-3 shadow-lg" onclick="takeScreenshot()" tabindex="0">
+                                <i class="fa-solid fa-desktop text-xl"></i><span>Screenshot</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-20" id="media-grid"></div>
+                </div>
+
+            </main>
+        </div>
+
+        <footer class="p-4 border-t border-white/10 bg-slate-950/80 backdrop-blur-xl flex justify-between items-center text-xs font-bold text-gray-400 z-50 relative">
+            <div class="flex space-x-6 pl-4">
+                <div class="flex items-center space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-blue-600 border border-blue-400 flex items-center justify-center text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]">X</div>
+                    <span>Delete</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-yellow-500 border border-yellow-300 flex items-center justify-center text-black shadow-[0_0_10px_rgba(234,179,8,0.5)]">Y</div>
+                    <span>Export</span>
+                </div>
+            </div>
+            <div class="flex space-x-6 pr-4">
+                <div class="flex items-center space-x-2">
+                    <div class="bg-white/10 px-2 py-1 rounded border border-white/20 flex items-center space-x-2 text-white">
+                        <i class="fa-solid fa-plus"></i> <span class="text-white/30 text-[10px]">/</span> <i class="fa-solid fa-circle-dot"></i>
+                    </div>
+                    <span>Navigate</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="bg-white/10 px-2 py-1 rounded border border-white/20 text-white flex items-center space-x-1">
+                        <i class="fa-solid fa-gamepad"></i><span>RS</span>
+                    </div>
+                    <span>Web Mouse</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-green-600 border border-green-400 flex items-center justify-center text-white shadow-[0_0_10px_rgba(22,163,74,0.5)]">A</div>
+                    <span>Select</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-red-600 border border-red-400 flex items-center justify-center text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]">B</div>
+                    <span>Back</span>
+                </div>
+            </div>
+        </footer>
+
+    <div id="media-viewer-overlay" class="fixed inset-0 bg-black/95 backdrop-blur-xl z-[400] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0">
+        
+        <div class="absolute top-8 right-8 z-50 flex flex-col space-y-4">
+            <button class="focusable bg-slate-800/80 hover:bg-red-600 text-white p-4 rounded-xl transition-colors flex items-center space-x-3 border border-slate-600 shadow-2xl w-40" onclick="closeMediaViewer()" tabindex="0">
+                <i class="fa-solid fa-xmark text-xl w-6 text-center"></i><span class="font-bold uppercase tracking-widest text-sm">Close</span>
+            </button>
+            <button class="focusable bg-slate-800/80 hover:bg-blue-600 text-white p-4 rounded-xl transition-colors flex items-center space-x-3 border border-slate-600 shadow-2xl w-40" onclick="deleteCurrentMedia()" tabindex="0">
+                <i class="fa-solid fa-trash text-xl w-6 text-center"></i><span class="font-bold uppercase tracking-widest text-sm">Delete</span>
+            </button>
+            <button class="focusable bg-slate-800/80 hover:bg-yellow-500 hover:text-black text-white p-4 rounded-xl transition-colors flex items-center space-x-3 border border-slate-600 shadow-2xl w-40" onclick="exportCurrentMedia()" tabindex="0">
+                <i class="fa-solid fa-usb text-xl w-6 text-center"></i><span class="font-bold uppercase tracking-widest text-sm">Export</span>
+            </button>
+            <button class="focusable bg-slate-800/80 hover:bg-fuchsia-600 hover:text-white text-white p-4 rounded-xl transition-colors flex items-center space-x-3 border border-slate-600 shadow-2xl w-40" onclick="setAsWallpaper()" tabindex="0">
+                <i class="fa-solid fa-image text-xl w-6 text-center"></i><span class="font-bold uppercase tracking-widest text-sm">Set BG</span>
+            </button>
+        </div>
+
+        <div id="media-content-container" class="w-full h-full flex items-center justify-center p-8">
+        </div>
+    </div>
+
+    <div id="camera-overlay" class="fixed inset-0 bg-black z-[450] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0">
+        <div class="absolute top-8 w-full flex justify-between px-12 z-50">
+            <div class="text-white font-bold tracking-widest text-xl drop-shadow-md animate-pulse text-red-500"><i class="fa-solid fa-circle text-xs mr-2"></i>LIVE</div>
+            <button class="focusable bg-red-600 hover:bg-red-500 text-white p-4 rounded-xl transition-colors flex items-center space-x-2 shadow-2xl" onclick="closeCamera()" tabindex="0">
+                <i class="fa-solid fa-xmark text-xl"></i><span class="font-bold uppercase tracking-widest text-sm">Close</span>
+            </button>
+        </div>
+        <div class="relative w-[80%] h-[75%] bg-slate-900 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(217,70,239,0.3)] border-2 border-slate-700">
+            <video id="camera-feed" class="w-full h-full object-cover transform scale-x-[-1]" autoplay playsinline></video>
+        </div>
+        <div class="absolute bottom-10 z-50">
+            <button class="focusable bg-white text-black hover:bg-lime-400 hover:text-white w-24 h-24 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.5)] transition-all duration-200 transform hover:scale-110" onclick="takePhoto()" tabindex="0">
+                <div class="w-20 h-20 border-4 border-black rounded-full hover:border-white transition-colors"></div>
+            </button>
+        </div>
+    </div>
+
+    <div id="update-chooser-overlay" class="fixed inset-0 bg-black/95 z-[500] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-2xl w-full flex flex-col text-center">
+            <i class="fa-solid fa-satellite-dish text-6xl text-lime-400 mb-6 animate-pulse"></i>
+            <h3 class="text-3xl font-bold text-white mb-2" id="update-title">Checking Cloud...</h3>
+            <p class="text-gray-400 mb-8" id="update-desc">Contacting GitHub servers for new firmware.</p>
+            
+            <div id="update-actions" class="flex justify-center space-x-4">
+                <button class="focusable bg-slate-800 border border-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl" onclick="closeUpdateChooser()" tabindex="0">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="usb-chooser-overlay" class="fixed inset-0 bg-black/95 z-[450] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-2xl w-full flex flex-col">
+            <h3 class="text-lime-400 font-bold uppercase tracking-widest text-sm mb-6">Select Removable Drive</h3>
+            <div class="flex-1 overflow-y-auto space-y-2 pr-2" id="usb-list-container">
+                <div class="text-center text-gray-500 py-8 font-mono">Scanning USB ports...</div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-slate-700 flex justify-end">
+                <button class="focusable bg-red-950/50 border border-red-900 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-xl" onclick="closeUsbChooser()" tabindex="0">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="theme-chooser-overlay" class="fixed inset-0 bg-black/95 z-[450] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col">
+            <h3 class="text-fuchsia-500 font-bold uppercase tracking-widest text-sm mb-6">Choose Background</h3>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <button class="focusable bg-slate-800 border-2 border-transparent hover:border-lime-400 rounded-xl p-4 flex flex-col items-center justify-center h-32" onclick="applyCustomWallpaper(null); closeThemeChooser();" tabindex="0">
+                    <i class="fa-solid fa-wand-magic-sparkles text-4xl text-fuchsia-500 mb-3"></i>
+                    <span class="font-bold text-sm">Dynamic App Art</span>
+                </button>
+                
+                <button class="focusable bg-slate-800 border-2 border-transparent hover:border-lime-400 rounded-xl overflow-hidden h-32 relative" onclick="applyCustomWallpaper('https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=600'); closeThemeChooser();" tabindex="0">
+                    <img src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=600" class="absolute inset-0 w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-black/40 flex items-end justify-center pb-2"><span class="font-bold text-white text-sm drop-shadow-md">gameZONE Neon</span></div>
+                </button>
+
+                <button class="focusable bg-slate-800 border-2 border-transparent hover:border-lime-400 rounded-xl overflow-hidden h-32 relative" onclick="applyCustomWallpaper('https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=600'); closeThemeChooser();" tabindex="0">
+                    <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=600" class="absolute inset-0 w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-black/40 flex items-end justify-center pb-2"><span class="font-bold text-white text-sm drop-shadow-md">90s Industrial</span></div>
+                </button>
+
+                <button class="focusable bg-slate-800 border-2 border-transparent hover:border-lime-400 rounded-xl overflow-hidden h-32 relative" onclick="applyCustomWallpaper('https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=600'); closeThemeChooser();" tabindex="0">
+                    <img src="https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=600" class="absolute inset-0 w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-black/40 flex items-end justify-center pb-2"><span class="font-bold text-white text-sm drop-shadow-md">Nautical Tides</span></div>
+                </button>
+            </div>
+
+            <div class="mt-auto pt-6 border-t border-slate-700 flex justify-end">
+                <button class="focusable bg-red-950/50 border border-red-900 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-xl" onclick="closeThemeChooser()" tabindex="0">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="network-chooser-overlay" class="fixed inset-0 bg-black/95 z-[250] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lime-400 font-bold uppercase tracking-widest text-sm">Select a Network</h3><i class="fa-solid fa-spinner fa-spin text-fuchsia-500 hidden" id="network-scan-spinner"></i>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-2 pr-2" id="network-list-container"><div class="text-center text-gray-500 py-8 font-mono">Scanning nearby frequencies...</div></div>
+            <div class="mt-6 pt-6 border-t border-slate-700 flex justify-end"><button class="focusable bg-red-950/50 border border-red-900 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-xl" onclick="closeNetworkChooser()" tabindex="0">CANCEL</button></div>
+        </div>
+    </div>
+
+    <div id="bluetooth-chooser-overlay" class="fixed inset-0 bg-black/95 z-[250] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lime-400 font-bold uppercase tracking-widest text-sm">Pair a Device</h3><i class="fa-solid fa-spinner fa-spin text-fuchsia-500 hidden" id="bluetooth-scan-spinner"></i>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-2 pr-2" id="bluetooth-list-container">
+                <div class="text-center text-gray-500 py-8 font-mono">Scanning frequencies (takes ~5s)...</div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-slate-700 flex justify-end">
+                <button class="focusable bg-red-950/50 border border-red-900 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-xl" onclick="closeBluetoothChooser()" tabindex="0">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-modal" class="fixed inset-0 bg-black/90 z-[600] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0">
+        <div class="bg-slate-900 border border-red-900 p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center">
+            <i class="fa-solid fa-triangle-exclamation text-5xl text-red-600 mb-4"></i>
+            <h3 class="text-2xl font-bold text-white mb-2">Uninstall App?</h3>
+            <p class="text-gray-400 mb-8">Are you sure you want to remove <span id="delete-app-name" class="font-bold text-white"></span> from your library?</p>
+            <div class="flex space-x-4">
+                <button class="focusable bg-slate-800 border border-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-xl flex-1" onclick="closeDeleteModal()" tabindex="0">CANCEL</button>
+                <button id="confirm-delete-btn" class="focusable bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-6 rounded-xl flex-1" tabindex="0">UNINSTALL</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="osk-overlay" class="fixed inset-0 bg-black/95 z-[300] hidden flex-col items-center justify-center transition-opacity duration-300 opacity-0 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-4xl w-full">
+            <div class="mb-6 text-center">
+                <h3 class="text-lime-400 font-bold mb-2 uppercase tracking-widest text-sm" id="osk-title">Keyboard</h3>
+                <div id="osk-scroll-container" class="bg-black border border-slate-700 text-white px-4 rounded-xl text-xl font-mono h-16 flex items-center overflow-x-hidden whitespace-nowrap w-full scroll-smooth">
+                    <span id="osk-mask"></span><span class="animate-pulse text-fuchsia-500 font-bold">_</span>
+                </div>
+            </div>
+            <div class="flex flex-col space-y-3 mb-6" id="osk-keyboard-container"></div>
+            <div class="grid grid-cols-2 gap-4">
+                 <button class="focusable bg-red-950/50 border border-red-900 hover:bg-red-600 text-white font-bold py-4 rounded-xl text-xl" onclick="closeOsk()" tabindex="0">CANCEL</button>
+                 <button class="focusable bg-sky-900/50 border border-sky-700 hover:bg-fuchsia-500 text-white font-bold py-4 rounded-xl text-xl" onclick="submitOsk()" tabindex="0">ENTER</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="launch-overlay" class="fixed inset-0 bg-black z-[200] hidden flex-col items-center justify-center transition-opacity duration-500 opacity-0">
+        <div class="relative w-full max-w-3xl h-64 rounded-2xl overflow-hidden mb-8 shadow-2xl border border-white/20">
+            <img id="launch-img" src="" class="absolute inset-0 w-full h-full object-cover filter brightness-50" alt="">
+            <div class="absolute inset-0 flex items-center justify-center flex-col">
+                <i class="fa-solid fa-circle-notch fa-spin text-5xl text-lime-400 mb-4 launching-glow rounded-full"></i>
+                <h2 id="launch-title" class="text-3xl font-bold text-white drop-shadow-md">Launching...</h2>
+                <p id="launch-status" class="text-gray-300 mt-2 font-mono text-sm">Communicating with local daemon...</p>
+            </div>
+        </div>
+        <div class="w-full max-w-md bg-gray-800 rounded-full h-2.5 overflow-hidden border border-gray-700"><div id="launch-progress" class="bg-fuchsia-500 h-2.5 rounded-full" style="width: 0%"></div></div>
+    </div>
+
+    <div id="web-game-overlay" class="fixed inset-0 bg-slate-950 z-[100] hidden flex-col">
+        <div class="bg-slate-900 p-4 flex items-center space-x-4 border-b border-slate-700 shadow-xl z-10">
+            <div class="flex space-x-2">
+                <button id="browser-back" class="focusable bg-slate-800 hover:bg-fuchsia-600 text-white p-3 rounded-xl transition-colors" tabindex="0"><i class="fa-solid fa-arrow-left"></i></button>
+                <button id="browser-forward" class="focusable bg-slate-800 hover:bg-fuchsia-600 text-white p-3 rounded-xl transition-colors" tabindex="0"><i class="fa-solid fa-arrow-right"></i></button>
+                <button id="browser-refresh" class="focusable bg-slate-800 hover:bg-fuchsia-600 text-white p-3 rounded-xl transition-colors" tabindex="0"><i class="fa-solid fa-rotate-right"></i></button>
+            </div>
+           <button id="browser-address-bar" class="focusable flex-1 min-w-0 bg-black border border-slate-700 hover:border-fuchsia-500 rounded-xl p-3 text-left flex items-center space-x-3 text-gray-300 transition-colors" tabindex="0">
+                <i class="fa-solid fa-magnifying-glass text-gray-500 flex-shrink-0"></i>
+                <span id="browser-url-text" class="truncate font-mono text-sm flex-1 block">Search or enter web address</span>
+            </button>
+            <div class="flex space-x-4 border-l border-slate-700 pl-4">
+                <button id="browser-history-btn" class="focusable bg-slate-800 hover:bg-fuchsia-600 text-white p-3 rounded-xl transition-colors" onclick="toggleBrowserHistory()" tabindex="0"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                <button class="focusable bg-red-950 border border-red-900 hover:bg-red-600 text-white px-6 py-3 rounded-xl font-bold flex items-center space-x-2 transition-colors" onclick="closeWebGame()" tabindex="0"><i class="fa-solid fa-xmark"></i><span>CLOSE</span></button>
+            </div>
+        </div>
+        
+        <div id="browser-history-panel" class="hidden absolute top-24 right-8 w-[400px] bg-slate-800 border border-slate-600 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-50 flex-col overflow-hidden max-h-[60vh]">
+            <div class="p-4 bg-slate-900 border-b border-slate-700 flex justify-between items-center"><h3 class="font-bold text-lime-400 tracking-widest text-sm uppercase"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Session History</h3></div>
+            <div id="browser-history-list" class="flex-1 overflow-y-auto p-2 space-y-1 bg-slate-800/50"></div>
+        </div>
+
+        <webview id="web-game-frame" class="w-full flex-1 border-0 bg-white" src=""></webview>
+    </div>
+
+    <script>
+        const socket = io();
+        socket.on('connect', () => console.log("Connected to gameZONE Bridge!"));
+
+        // --- 1. Audio Setup ---
+        let audioInitialized = false;
+        const synth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.05, release: 0.1 } }).toDestination();
+        synth.volume.value = -15; 
+        function initAudio() { if (!audioInitialized) { Tone.start(); audioInitialized = true; } }
+        function playNavSound() { if(audioInitialized) synth.triggerAttackRelease("C5", "32n"); }
+        function playSelectSound() { if(audioInitialized) synth.triggerAttackRelease(["C4", "E4", "G4"], "16n"); }
+        function playBackSound() { if(audioInitialized) synth.triggerAttackRelease("G3", "16n"); }
+        document.body.addEventListener('click', initAudio, { once: true });
+        document.body.addEventListener('keydown', initAudio, { once: true });
+        
+        // --- BOOT SEQUENCE ENGINE ---
+        window.addEventListener('DOMContentLoaded', () => {
+            const bootOverlay = document.getElementById('boot-sequence');
+            const bootLogo = document.getElementById('boot-logo');
+            
+            // Wait half a second, then trigger the animation and audio swell
+            setTimeout(() => {
+                // Force Tone.js to wake up instantly
+                if (Tone.context.state !== 'running') Tone.start();
+                
+                // Build a thick, sweeping synthesizer chord
+                const bootSynth = new Tone.PolySynth(Tone.Synth, { 
+                    oscillator: { type: "fatsawtooth" },
+                    envelope: { attack: 0.5, decay: 0.2, sustain: 0.8, release: 2 }
+                }).toDestination();
+                
+                bootSynth.volume.value = -12;
+                bootSynth.triggerAttackRelease(["C3", "G3", "C4", "E4"], "2n");
+                
+                // Scale and fade the logo in
+                bootLogo.classList.remove('scale-0', 'opacity-0');
+                bootLogo.classList.add('scale-100', 'opacity-100');
+            }, 500);
+
+            // Hold the logo on screen, then fade the black overlay away to reveal the OS
+            setTimeout(() => {
+                bootOverlay.classList.add('opacity-0');
+                setTimeout(() => {
+                    bootOverlay.style.display = 'none';
+                    // Trigger the UI navigation ping once the dashboard is fully visible
+                    playNavSound(); 
+                }, 1000);
+            }, 3500);
+        });
+
+        // --- IDLE SCREENSAVER ENGINE ---
+        let idleTimer;
+        const IDLE_TIMEOUT = 120000; // 2 minutes in milliseconds
+        const screensaverOverlay = document.getElementById('screensaver-overlay');
+        const screensaverClock = document.getElementById('screensaver-clock');
+        let isScreensaverActive = false;
+
+        function resetIdleTimer() {
+            if (isScreensaverActive) {
+                isScreensaverActive = false;
+                screensaverOverlay.classList.remove('opacity-100');
+                screensaverOverlay.classList.add('opacity-0');
+                setTimeout(() => { screensaverOverlay.style.display = 'none'; screensaverOverlay.classList.add('hidden'); }, 1000);
+            }
+            
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(activateScreensaver, IDLE_TIMEOUT);
+        }
+
+        function activateScreensaver() {
+            isScreensaverActive = true;
+            screensaverClock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            screensaverOverlay.classList.remove('hidden');
+            screensaverOverlay.style.display = 'flex';
+            // Slight delay to allow display:flex to apply before fading in
+            setTimeout(() => {
+                screensaverOverlay.classList.remove('opacity-0');
+                screensaverOverlay.classList.add('opacity-100');
+            }, 50);
+        }
+
+        // Update the big clock every minute while screensaver is active
+        setInterval(() => {
+            if (isScreensaverActive) {
+                screensaverClock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+        }, 60000);
+
+        // Listen for standard mouse/keyboard input to reset timer
+        window.addEventListener('mousemove', resetIdleTimer);
+        window.addEventListener('keydown', resetIdleTimer);
+        window.addEventListener('click', resetIdleTimer);
+        resetIdleTimer(); // Start the timer on boot
+
+        // --- 2. Dynamic Library State & UI ---
+        const clockEl = document.getElementById('clock');
+        setInterval(() => clockEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 1000);
+        clockEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // --- BACKGROUND ENGINE ---
+        let customWallpaper = localStorage.getItem('customWallpaper');
+        const dynamicBg = document.getElementById('dynamic-bg');
+
+        function setBackground(url) {
+            if (customWallpaper) {
+                // Custom Wallpaper: Full opacity, no blur, slight dim to keep text readable
+                dynamicBg.style.backgroundImage = `url('${customWallpaper}')`;
+                dynamicBg.style.filter = "blur(0px) brightness(0.6)"; 
+                dynamicBg.style.opacity = "1"; 
+            } else {
+                // Dynamic App Art: Heavy blur, heavily dimmed, 50% transparent
+                dynamicBg.style.backgroundImage = `url('${url}')`;
+                dynamicBg.style.filter = "blur(8px) brightness(0.4)";
+                dynamicBg.style.opacity = "0.5";
+            }
+        }
+
+        // Run immediately on boot to restore their saved setting
+        if (customWallpaper) {
+            document.getElementById('ui-theme-status').textContent = "Custom Wallpaper";
+            setBackground(); 
+        }
+
+        function applyCustomWallpaper(url) {
+            if (url) {
+                localStorage.setItem('customWallpaper', url);
+                customWallpaper = url;
+                document.getElementById('ui-theme-status').textContent = "Custom Wallpaper";
+            } else {
+                localStorage.removeItem('customWallpaper');
+                customWallpaper = null;
+                document.getElementById('ui-theme-status').textContent = "Dynamic App Art";
+            }
+            
+            // Force the UI to repaint the background instantly
+            const fallbackBg = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=600';
+            let dynamicUrl = fallbackBg;
+            if (typeof recentlyUsedApps !== 'undefined' && recentlyUsedApps.length > 0) dynamicUrl = recentlyUsedApps[0].iconData || fallbackBg;
+            
+            setBackground(dynamicUrl);
+            showToast('Wallpaper Updated', 'Your background has been changed', 'success');
+        }
+
+        // --- OTA UPDATER ENGINE ---
+        const updateOverlay = document.getElementById('update-chooser-overlay');
+        let pendingUpdateUrl = null;
+
+        function openUpdateChooser() {
+            playSelectSound();
+            updateOverlay.classList.remove('hidden', 'opacity-0');
+            updateOverlay.classList.add('opacity-100');
+            updateOverlay.style.display = 'flex';
+            setTimeout(() => updateOverlay.querySelector('.focusable')?.focus(), 100);
+        }
+
+        function closeUpdateChooser() {
+            playBackSound();
+            updateOverlay.classList.remove('opacity-100');
+            updateOverlay.classList.add('opacity-0');
+            setTimeout(() => {
+                updateOverlay.style.display = 'none';
+                updateOverlay.classList.add('hidden');
+                document.querySelector('[onclick="checkSystemUpdate()"]')?.focus();
+            }, 300);
+        }
+
+        function checkSystemUpdate() {
+            openUpdateChooser();
+            document.getElementById('update-title').textContent = "Checking Cloud...";
+            document.getElementById('update-desc').textContent = "Contacting GitHub servers for new firmware.";
+            document.getElementById('update-actions').innerHTML = `<button class="focusable bg-slate-800 border border-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl" onclick="closeUpdateChooser()" tabindex="0">CANCEL</button>`;
+            
+            socket.emit('check_update');
+        }
+
+        socket.on('update_available', (data) => {
+            playSelectSound();
+            pendingUpdateUrl = data.url;
+            document.getElementById('update-title').textContent = `Version ${data.version} Available`;
+            document.getElementById('update-desc').textContent = data.notes || "A new system update is ready to install.";
+            
+            document.getElementById('update-actions').innerHTML = `
+                <button class="focusable bg-slate-800 border border-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl" onclick="closeUpdateChooser()" tabindex="0">LATER</button>
+                <button class="focusable bg-lime-500 hover:bg-lime-400 text-black font-bold py-3 px-8 rounded-xl flex items-center space-x-2" onclick="applySystemUpdate()" tabindex="0">
+                    <i class="fa-solid fa-bolt"></i><span>INSTALL & REBOOT</span>
+                </button>
+            `;
+            setTimeout(() => updateOverlay.querySelector('.bg-lime-500')?.focus(), 100);
+        });
+
+        socket.on('update_none', (version) => {
+            document.getElementById('update-title').textContent = "System Up to Date";
+            document.getElementById('update-desc').textContent = `You are running the latest firmware (v${version}).`;
+            document.getElementById('ui-update-status').textContent = `Up to date (v${version})`;
+            document.getElementById('update-actions').innerHTML = `<button class="focusable bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-3 px-8 rounded-xl" onclick="closeUpdateChooser()" tabindex="0">CLOSE</button>`;
+            setTimeout(() => updateOverlay.querySelector('.bg-fuchsia-600')?.focus(), 100);
+        });
+
+        function applySystemUpdate() {
+            playSelectSound();
+            document.getElementById('update-title').textContent = "Downloading...";
+            document.getElementById('update-desc').textContent = "Extracting files to the core system. Do not power off.";
+            document.getElementById('update-actions').innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-4xl text-lime-400 mt-4"></i>`;
+            socket.emit('apply_update', pendingUpdateUrl);
+        }
+
+        socket.on('update_success', () => {
+            document.getElementById('update-title').textContent = "Update Complete";
+            document.getElementById('update-desc').textContent = "Rebooting hardware in 3 seconds...";
+            document.getElementById('update-actions').innerHTML = `<i class="fa-solid fa-check-circle text-5xl text-lime-400 mt-4"></i>`;
+        });
+
+        socket.on('update_error', (msg) => {
+            document.getElementById('update-title').textContent = "Update Failed";
+            document.getElementById('update-desc').textContent = msg;
+            document.getElementById('update-actions').innerHTML = `<button class="focusable bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-8 rounded-xl" onclick="closeUpdateChooser()" tabindex="0">CLOSE</button>`;
+            setTimeout(() => updateOverlay.querySelector('.bg-red-600')?.focus(), 100);
+        });
+
+        // --- THEME CHOOSER LOGIC ---
+        const themeChooserOverlay = document.getElementById('theme-chooser-overlay');
+
+        function openThemeChooser() {
+            playSelectSound();
+            themeChooserOverlay.classList.remove('hidden', 'opacity-0');
+            themeChooserOverlay.classList.add('opacity-100');
+            themeChooserOverlay.style.display = 'flex';
+            setTimeout(() => themeChooserOverlay.querySelector('.focusable')?.focus(), 100);
+        }
+
+        function closeThemeChooser() {
+            playBackSound();
+            themeChooserOverlay.classList.remove('opacity-100');
+            themeChooserOverlay.classList.add('opacity-0');
+            setTimeout(() => {
+                themeChooserOverlay.style.display = 'none';
+                themeChooserOverlay.classList.add('hidden');
+                document.querySelector('[onclick="openThemeChooser()"]')?.focus();
+            }, 300);
+        }
+
+        function setAsWallpaper() {
+            if (!activeViewerMedia) return;
+            playSelectSound();
+            applyCustomWallpaper(activeViewerMedia.url);
+            closeMediaViewer();
+        }
+
+        const views = document.querySelectorAll('.view-section');
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                playSelectSound();
+                views.forEach(v => { v.classList.add('hidden'); v.classList.remove('animate-enter'); });
+                const activeView = document.getElementById(`view-${item.dataset.view}`);
+                activeView.classList.remove('hidden'); void activeView.offsetWidth; activeView.classList.add('animate-enter');
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('focused'));
+                item.classList.add('focused'); item.focus();
+            });
+            item.addEventListener('focus', () => playNavSound());
+        });
+
+        let systemLibrary = [];
+        socket.emit('scan_library');
+        socket.on('library_scan_results', (scannedApps) => {
+            systemLibrary = scannedApps;
+            renderDynamicLibrary();
+
+            if (typeof renderStoreGrid === 'function') renderStoreGrid();
+        });
+
+        // --- RECENTLY USED TRACKING SYSTEM ---
+        let recentlyUsedApps = JSON.parse(localStorage.getItem('recentlyUsedApps')) || [];
+
+        function trackAppLaunch(app) {
+            // Remove the app if it's already in the list to avoid duplicates
+            recentlyUsedApps = recentlyUsedApps.filter(item => item.title !== app.title);
+            // Push it to the front of the line!
+            recentlyUsedApps.unshift(app);
+            // Cap it at 4 items max
+            if (recentlyUsedApps.length > 4) recentlyUsedApps.pop();
+            // Save to browser memory
+            localStorage.setItem('recentlyUsedApps', JSON.stringify(recentlyUsedApps));
+        }
+
+        function renderDynamicLibrary() {
+            const recentContainer = document.getElementById('recent-games-container');
+            const libraryGrid = document.getElementById('library-grid');
+            recentContainer.innerHTML = ''; libraryGrid.innerHTML = '';
+
+            if (systemLibrary.length === 0) {
+                libraryGrid.innerHTML = '<div class="text-center text-gray-500 py-12 font-mono">No apps or games discovered.</div>';
+                return;
+            }
+
+            const fallbackBg = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=600';
+            
+            // Fallback: If recentlyUsedApps is empty, seed it with the first few system apps
+            if (recentlyUsedApps.length === 0) {
+                recentlyUsedApps = systemLibrary.slice(0, 4);
+            }
+
+            // Set background to the most recently used app
+            setBackground(recentlyUsedApps[0].iconData || fallbackBg);
+
+            // Populate the "Recently Used Apps" horizontal row using our tracked array!
+            recentlyUsedApps.forEach((app) => recentContainer.appendChild(createConsoleTile(app, 'w-72 h-44 flex-shrink-0')));
+            
+            // Populate the full library grid
+            systemLibrary.forEach(app => libraryGrid.appendChild(createConsoleTile(app, 'w-full h-56')));
+
+            // Update the main Featured banner to match your most recently used app
+            const featuredGameCard = document.getElementById('featured-game');
+            if (featuredGameCard && recentlyUsedApps[0]) {
+                const oldCard = featuredGameCard;
+                const newCard = oldCard.cloneNode(true);
+                oldCard.parentNode.replaceChild(newCard, oldCard);
+                newCard.querySelector('h2').textContent = recentlyUsedApps[0].title;
+                newCard.addEventListener('click', () => launchGame(recentlyUsedApps[0]));
+                newCard.addEventListener('focus', () => { setBackground(recentlyUsedApps[0].iconData || fallbackBg); playNavSound(); });
+            }
+        }
+
+        function createConsoleTile(app, layoutClasses) {
+            const div = document.createElement('div');
+            div.className = `relative rounded-xl overflow-hidden focusable group shadow-lg border border-white/5 ${layoutClasses} bg-gradient-to-br from-slate-800 to-slate-950`;
+            div.tabIndex = 0;
+
+            const iconHtml = app.iconData 
+                ? `<img src="${app.iconData}" class="w-20 h-20 object-contain drop-shadow-2xl transition-transform duration-500 group-hover:scale-125" loading="lazy">`
+                : `<i class="fa-solid fa-gamepad text-5xl text-fuchsia-500 drop-shadow-lg transition-transform duration-500 group-hover:scale-125"></i>`;
+
+            div.innerHTML = `
+                <div class="absolute inset-0 flex items-center justify-center pb-6">${iconHtml}</div>
+                <div class="absolute top-3 right-3 bg-fuchsia-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow">App</div>
+                <div class="absolute bottom-0 left-0 p-4 w-full bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+                    <h3 class="text-sm font-bold text-white drop-shadow truncate w-full">${app.title}</h3>
+                </div>
+            `;
+
+            div.addEventListener('focus', () => playNavSound());
+            div.addEventListener('click', () => launchGame(app));
+            div.addEventListener('keydown', (e) => { if (e.key === 'Enter') launchGame(app); });
+
+            return div;
+        }
+
+        // --- 3. Launch & Browser Logic ---
+        const launchOverlay = document.getElementById('launch-overlay');
+        const webGameOverlay = document.getElementById('web-game-overlay');
+        const browserWebview = document.getElementById('web-game-frame');
+        
+        function launchGame(game) {
+            playSelectSound();
+            trackAppLaunch(game);
+            
+            // Intercept Web Apps!
+            if (game.exec.startsWith('GAMEOS_WEB:')) {
+                const url = game.exec.replace('GAMEOS_WEB:', '');
+                openWebGame(url);
+                return;
+            }
+
+            // Normal Native Game Launch
+            launchOverlay.classList.remove('hidden', 'opacity-0'); launchOverlay.classList.add('opacity-100'); launchOverlay.style.display = 'flex';
+            document.getElementById('launch-title').textContent = `Launching ${game.title}`;
+            document.getElementById('launch-img').src = game.iconData || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=600';
+            document.getElementById('launch-status').textContent = `Establishing connection to Linux backend...`;
+            socket.emit('launch_app', game.exec); 
+            setTimeout(() => closeLaunchOverlay(), 2000);
+        }
+
+        function closeLaunchOverlay() {
+            launchOverlay.classList.remove('opacity-100'); launchOverlay.classList.add('opacity-0');
+            setTimeout(() => { launchOverlay.style.display = 'none'; launchOverlay.classList.add('hidden'); }, 500);
+        }
+
+        function openWebGame(url) {
+            browserWebview.src = url; webGameOverlay.style.display = 'flex';
+            setTimeout(() => document.getElementById('browser-address-bar').focus(), 100);
+        }
+
+        function closeWebGame() {
+            playBackSound(); webGameOverlay.style.display = 'none';
+            document.querySelector('[data-view="browser"]').focus();
+        }
+
+        function restartSystem() { playSelectSound(); setTimeout(() => { socket.emit('system_reboot'); }, 500); }
+        function closeGameOS() { playSelectSound(); socket.emit('close_os'); }
+        function shutdownSystem() { playSelectSound(); setTimeout(() => { socket.emit('system_shutdown'); }, 500); }
+
+        // --- CAMERA & SCREENSHOT ENGINE ---
+        const cameraOverlay = document.getElementById('camera-overlay');
+        const cameraFeed = document.getElementById('camera-feed');
+        let cameraStream = null;
+
+        async function openCamera() {
+            playSelectSound();
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1920, height: 1080 } });
+                cameraFeed.srcObject = cameraStream;
+                cameraOverlay.classList.remove('hidden');
+                void cameraOverlay.offsetWidth;
+                cameraOverlay.classList.remove('opacity-0');
+                cameraOverlay.classList.add('opacity-100');
+                cameraOverlay.style.display = 'flex';
+                setTimeout(() => {
+                    const captureBtn = cameraOverlay.querySelector('.focusable.rounded-full');
+                    if (captureBtn) captureBtn.focus();
+                }, 100);
+            } catch (err) {
+                showToast('Camera Error', 'Could not access webcam hardware', 'error');
+            }
+        }
+
+        function closeCamera() {
+            playBackSound();
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            cameraOverlay.classList.remove('opacity-100');
+            cameraOverlay.classList.add('opacity-0');
+            setTimeout(() => {
+                cameraOverlay.style.display = 'none';
+                cameraOverlay.classList.add('hidden');
+                document.querySelector('[onclick="openCamera()"]')?.focus();
+            }, 300);
+        }
+
+        function takePhoto() {
+            playSelectSound();
+            const flash = document.createElement('div');
+            flash.className = 'fixed inset-0 bg-white z-[500] transition-opacity duration-300';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.classList.add('opacity-0'), 50);
+            setTimeout(() => flash.remove(), 350);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = cameraFeed.videoWidth;
+            canvas.height = cameraFeed.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(cameraFeed, 0, 0, canvas.width, canvas.height);
+            
+            const base64Data = canvas.toDataURL('image/png');
+            socket.emit('save_camera_photo', base64Data);
+            showToast('Snap!', 'Photo saved to Media Library', 'success');
+            setTimeout(() => socket.emit('scan_media'), 1000);
+        }
+
+        function takeScreenshot() {
+            playSelectSound();
+            const flash = document.createElement('div');
+            flash.className = 'fixed inset-0 bg-lime-400 z-[500] transition-opacity duration-500 opacity-50';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.classList.add('opacity-0'), 50);
+            setTimeout(() => flash.remove(), 550);
+
+            socket.emit('take_screenshot');
+            showToast('Screenshot Captured', 'Saved to Media Library', 'success');
+            setTimeout(() => socket.emit('scan_media'), 1000);
+        }
+
+        // --- MEDIA HUB ENGINE ---
+        let systemMedia = [];
+        const mediaViewerOverlay = document.getElementById('media-viewer-overlay');
+        const mediaContentContainer = document.getElementById('media-content-container');
+        let activeViewerMedia = null;
+
+        socket.emit('get_storage_info');
+        socket.on('storage_info', (info) => {
+            document.getElementById('storage-readout').textContent = `${info.free} Free of ${info.total} (${info.percent} Used)`;
+        });
+
+        socket.emit('scan_media');
+        socket.on('media_scan_results', (mediaFiles) => {
+            systemMedia = mediaFiles;
+            renderMediaLibrary();
+        });
+
+        function renderMediaLibrary() {
+            const mediaGrid = document.getElementById('media-grid');
+            if (!mediaGrid) return;
+            mediaGrid.innerHTML = '';
+
+            if (systemMedia.length === 0) {
+                mediaGrid.innerHTML = '<div class="text-center text-gray-500 py-12 font-mono col-span-full">No photos or videos found in host folders.</div>';
+                return;
+            }
+
+            systemMedia.forEach(media => {
+                const div = document.createElement('div');
+                div.className = `relative rounded-xl overflow-hidden focusable group shadow-lg border border-white/5 w-full h-56 bg-slate-900 file-tile`;
+                div.tabIndex = 0;
+                // Store the absolute file path directly on the HTML element so the controller can find it!
+                div.dataset.filepath = media.path;
+
+                let icon = '<i class="fa-solid fa-file"></i>';
+                let visualHtml = '';
+                
+                if (media.type === 'video') {
+                    icon = '<i class="fa-solid fa-film"></i>';
+                    visualHtml = `<img src="${media.url}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy">`;
+                } else if (media.type === 'audio') {
+                    icon = '<i class="fa-solid fa-music"></i>';
+                    visualHtml = `<div class="absolute inset-0 flex items-center justify-center text-6xl text-fuchsia-500/30 group-hover:text-fuchsia-500/60 transition-colors"><i class="fa-solid fa-headphones"></i></div>`;
+                } else {
+                    icon = '<i class="fa-solid fa-camera"></i>';
+                    visualHtml = `<img src="${media.url}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy">`;
+                }
+                
+                div.innerHTML = `
+                    ${visualHtml}
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-90 group-hover:opacity-100 transition-opacity"></div>
+                    
+                    <div class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded shadow border border-white/10">${media.size}</div>
+                    
+                    <div class="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-2 border border-white/10">
+                        ${icon} <span class="uppercase tracking-wider">${media.type}</span>
+                    </div>
+                    
+                    <div class="absolute bottom-0 left-0 p-4 w-full">
+                        <h3 class="text-sm font-bold text-white drop-shadow truncate w-full">${media.title}</h3>
+                        <div class="flex space-x-3 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span class="text-[10px] text-gray-400 font-bold"><span class="text-red-400 border border-red-400/50 rounded px-1 mr-1">X</span>Delete</span>
+                            <span class="text-[10px] text-gray-400 font-bold"><span class="text-green-400 border border-green-400/50 rounded px-1 mr-1">Y</span>Export</span>
+                        </div>
+                    </div>
+                `;
+                div.addEventListener('focus', () => playNavSound());
+                div.addEventListener('click', () => openMediaViewer(media));
+                div.addEventListener('keydown', (e) => { if (e.key === 'Enter') openMediaViewer(media); });
+                mediaGrid.appendChild(div);
+            });
+        }
+
+        function openMediaViewer(media) {
+            activeViewerMedia = media;            
+            playSelectSound();
+            mediaContentContainer.innerHTML = ''; 
+            if (media.type === 'video') {
+                mediaContentContainer.innerHTML = `<video src="${media.url}" controls autoplay class="max-w-full max-h-full rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)]"></video>`;
+            } else if (media.type === 'audio') {
+                mediaContentContainer.innerHTML = `
+                    <div class="bg-slate-900 border border-slate-700 p-12 rounded-3xl flex flex-col items-center">
+                        <i class="fa-solid fa-music text-7xl text-fuchsia-500 mb-8 animate-pulse"></i>
+                        <h3 class="text-2xl font-bold text-white mb-6 text-center">${media.title}</h3>
+                        <audio src="${media.url}" controls autoplay class="w-96"></audio>
+                    </div>`;
+            } else {
+                mediaContentContainer.innerHTML = `<img src="${media.url}" class="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)]">`;
+            }
+            mediaViewerOverlay.classList.remove('hidden');
+            void mediaViewerOverlay.offsetWidth;
+            mediaViewerOverlay.classList.remove('opacity-0');
+            mediaViewerOverlay.classList.add('opacity-100');
+            mediaViewerOverlay.style.display = 'flex';
+            setTimeout(() => {
+                const closeBtn = mediaViewerOverlay.querySelector('.focusable');
+                if (closeBtn) closeBtn.focus();
+            }, 100);
+        }
+
+        function closeMediaViewer() {
+            activeViewerMedia = null;            
+            playBackSound();
+            mediaViewerOverlay.classList.remove('opacity-100');
+            mediaViewerOverlay.classList.add('opacity-0');
+            const vid = mediaContentContainer.querySelector('video');
+            if (vid) vid.pause();
+            setTimeout(() => {
+                mediaViewerOverlay.style.display = 'none';
+                mediaViewerOverlay.classList.add('hidden');
+                mediaContentContainer.innerHTML = ''; 
+                const lastFocused = document.querySelector('#view-media .focusable');
+                if (lastFocused) lastFocused.focus();
+            }, 300);
+        }
+
+        function deleteCurrentMedia() {
+            if (!activeViewerMedia) return;
+            playSelectSound();
+            socket.emit('delete_file', activeViewerMedia.path);
+            closeMediaViewer(); 
+        }
+
+        function exportCurrentMedia() {
+            if (!activeViewerMedia) return;
+            playSelectSound();
+            fileToExport = activeViewerMedia.path;
+            
+            // The USB chooser has a higher z-index (450), so it will gracefully slide right over the top of the Media Viewer!
+            openUsbChooser();
+        }
+
+        // --- APP DELETION ---
+        const deleteModal = document.getElementById('delete-modal');
+        let appToDelete = null;
+
+        function openDeleteModal(app) {
+            appToDelete = app;
+            document.getElementById('delete-app-name').textContent = app.title;
+            deleteModal.classList.remove('hidden', 'opacity-0');
+            deleteModal.classList.add('opacity-100');
+            deleteModal.style.display = 'flex';
+            document.getElementById('confirm-delete-btn').focus();
+        }
+
+        function closeDeleteModal() {
+            playBackSound();
+            deleteModal.classList.remove('opacity-100');
+            deleteModal.classList.add('opacity-0');
+            setTimeout(() => { deleteModal.style.display = 'none'; deleteModal.classList.add('hidden'); }, 300);
+        }
+
+        document.getElementById('confirm-delete-btn').addEventListener('click', () => {
+            if (appToDelete) {
+                socket.emit('delete_file', appToDelete.path); // path is stored in your object
+                showToast('Uninstalled', appToDelete.title + ' removed.', 'success');
+            }
+            closeDeleteModal();
+        });
+
+        // --- USB CHOOSER LOGIC ---
+        const usbChooserOverlay = document.getElementById('usb-chooser-overlay'); 
+        const usbListContainer = document.getElementById('usb-list-container');
+        let fileToExport = null;
+
+        function openUsbChooser() {
+            playSelectSound(); 
+            usbChooserOverlay.classList.remove('hidden', 'opacity-0'); 
+            usbChooserOverlay.classList.add('opacity-100'); 
+            usbChooserOverlay.style.display = 'flex';
+            
+            usbListContainer.innerHTML = '<div class="text-center text-gray-500 py-8 font-mono">Scanning USB ports...</div>'; 
+            setTimeout(() => usbChooserOverlay.querySelector('button')?.focus(), 100); 
+            
+            // Ask backend for USB drives
+            socket.emit('get_usb_drives');
+        }
+
+        function closeUsbChooser() {
+            playBackSound(); 
+            fileToExport = null;
+            usbChooserOverlay.classList.remove('opacity-100'); 
+            usbChooserOverlay.classList.add('opacity-0');
+            setTimeout(() => { 
+                usbChooserOverlay.style.display = 'none'; 
+                usbChooserOverlay.classList.add('hidden'); 
+                
+                // Return focus back to the media grid tile
+                const lastFocused = document.querySelector('#view-media .focusable[data-filepath]');
+                if (lastFocused) lastFocused.focus(); 
+            }, 300);
+        }
+
+        // Listen for the backend returning available USB drives
+        socket.on('usb_list', (drives) => {
+            usbListContainer.innerHTML = '';
+            
+            if (drives.length === 0) { 
+                usbListContainer.innerHTML = '<div class="text-center text-red-400 py-8 font-bold">No removable drives found. Insert USB.</div>'; 
+                return setTimeout(() => usbChooserOverlay.querySelector('button')?.focus(), 100); 
+            }
+            
+            drives.forEach(drive => {
+                const btn = document.createElement('button'); 
+                btn.className = 'focusable w-full bg-white/5 hover:bg-fuchsia-600 border border-white/10 rounded-xl p-4 flex justify-between items-center transition-colors text-left group'; 
+                btn.tabIndex = 0;
+                
+                btn.innerHTML = `<div class="flex items-center"><i class="fa-solid fa-usb text-fuchsia-500 mr-4 group-hover:text-white"></i><span class="font-bold text-lg truncate w-64">${drive}</span></div>`;
+                
+                btn.addEventListener('click', () => {
+                    playSelectSound();
+                    btn.innerHTML = `<div class="flex items-center w-full justify-center text-sky-300 font-bold"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Exporting...</div>`;
+                    if (fileToExport) {
+                        socket.emit('export_to_usb', { filePath: fileToExport, usbName: drive });
+                    }
+                });
+                btn.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); }); 
+                usbListContainer.appendChild(btn);
+            });
+            setTimeout(() => usbListContainer.querySelector('.focusable')?.focus(), 100);
+        });
+
+        // Listen for success/error messages from CRUD operations
+        socket.on('file_action_success', (msg) => {
+            showToast('Success', msg, 'success');
+            if (usbChooserOverlay.style.display === 'flex') closeUsbChooser();
+            // Rescan media so the grid updates (removing the deleted/moved file)
+            setTimeout(() => socket.emit('scan_media'), 500);
+        });
+
+        socket.on('file_action_error', (msg) => {
+            showToast('File Error', msg, 'error');
+            if (usbChooserOverlay.style.display === 'flex') closeUsbChooser();
+        });
+
+        // --- FIREBASE APP STORE ENGINE ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyC6O1g78_kcpKI0HMks7p5zeUolW2TP5hI",
+          authDomain: "gamezone-c3f85.firebaseapp.com",
+          projectId: "gamezone-c3f85",
+          storageBucket: "gamezone-c3f85.firebasestorage.app",
+          messagingSenderId: "326288966720",
+          appId: "1:326288966720:web:444c01b9dcafd25a090ba5",
+          measurementId: "G-GJ5ZW0BW3S"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const storeGrid = document.getElementById('store-grid');
+
+        // Store the catalog in memory so we can re-render it whenever your local library changes
+        let storeCatalog = null;
+
+        db.ref('apps').on('value', (snapshot) => {
+            storeCatalog = snapshot.val();
+            renderStoreGrid();
+        });
+
+        function renderStoreGrid() {
+            const storeGrid = document.getElementById('store-grid');
+            if (!storeGrid) return;
+            storeGrid.innerHTML = '';
+
+            if (!storeCatalog) {
+                storeGrid.innerHTML = '<div class="text-center text-gray-500 py-12 font-mono col-span-full">No apps currently available in the store.</div>';
+                return;
+            }
+
+            Object.keys(storeCatalog).forEach(key => {
+                const app = storeCatalog[key];
+                const div = document.createElement('div');
+                
+                // Cross-reference with the local system library!
+                const isInstalled = systemLibrary.some(installedApp => installedApp.title === app.title);
+
+                div.className = `focusable bg-slate-800 border border-slate-700 hover:border-lime-400 rounded-2xl p-6 flex flex-col transition-all duration-200 group ${isInstalled ? 'opacity-70 hover:opacity-100' : ''}`;
+                div.tabIndex = 0;
+
+                const tagColor = app.type === 'web' ? 'bg-sky-600' : 'bg-fuchsia-600';
+                const tagLabel = app.type === 'web' ? 'PWA Web App' : 'Native Linux';
+
+                // Render a different button depending on if they own it
+                let buttonHtml = '';
+                if (isInstalled) {
+                    buttonHtml = `
+                        <button class="bg-slate-700 text-lime-400/50 border border-lime-400/20 font-bold py-3 rounded-xl w-full flex items-center justify-center space-x-2 cursor-default" disabled>
+                            <i class="fa-solid fa-check"></i><span>Installed in Library</span>
+                        </button>
+                    `;
+                } else {
+                    buttonHtml = `
+                        <button data-apptitle="${app.title}" class="install-btn bg-lime-500 hover:bg-lime-400 text-black font-bold py-3 rounded-xl w-full flex items-center justify-center space-x-2 transition-colors">
+                            <i class="fa-solid fa-download"></i><span>Install to Library</span>
+                        </button>
+                    `;
+                }
+
+                div.innerHTML = `
+                    <div class="flex items-start space-x-4 mb-4">
+                        <img src="${app.icon}" class="w-20 h-20 rounded-xl object-cover shadow-lg border border-white/10 group-hover:scale-105 transition-transform" onerror="this.src='https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=200'">
+                        <div class="flex-1">
+                            <div class="${tagColor} text-white text-[10px] font-bold px-2 py-1 rounded inline-block mb-1">${tagLabel}</div>
+                            <h3 class="text-xl font-bold text-white">${app.title}</h3>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-400 flex-1 mb-6">${app.description || 'No description provided.'}</p>
+                    ${buttonHtml}
+                `;
+
+                // Only attach the click listener if it is NOT installed yet
+                if (!isInstalled) {
+                    div.addEventListener('click', () => {
+                        playSelectSound();
+                        const btn = div.querySelector('.install-btn');
+                        if(btn) btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>Installing...</span>';
+                        socket.emit('install_app', app);
+                    });
+                    div.addEventListener('keydown', (e) => { if (e.key === 'Enter') div.click(); });
+                } else {
+                    // If they click an installed app, make a boop sound to let them know it's locked
+                    div.addEventListener('click', playBackSound);
+                    div.addEventListener('keydown', (e) => { if (e.key === 'Enter') playBackSound(); });
+                }
+
+                storeGrid.appendChild(div);
+            });
+            
+            setTimeout(() => { if (!document.activeElement || !document.activeElement.closest('.view-section:not(.hidden)')) storeGrid.querySelector('.focusable')?.focus(); }, 100);
+        }
+
+        // Listen for live progress updates
+        socket.on('install_progress', (data) => {
+            const btn = document.querySelector(`button[data-apptitle="${data.title}"]`);
+            if (btn) {
+                // Update the button text to show the live percentage
+                btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i><span>Downloading... ${data.progress}%</span>`;
+                // Turn the button gray while it downloads so the user knows it is busy
+                btn.classList.remove('bg-lime-500', 'hover:bg-lime-400', 'text-black');
+                btn.classList.add('bg-slate-700', 'text-white');
+            }
+        });
+
+        // Listen for successful installation
+        socket.on('install_success', (msg) => {
+            showToast('App Installed', msg, 'success');
+            
+            // Wait for the hard drive to finish saving the file, then ask the backend for a fresh scan!
+            setTimeout(() => {
+                socket.emit('scan_library'); // <--- THE FIX: UI asks the server to scan
+                if (typeof renderStoreGrid === 'function') renderStoreGrid();
+            }, 800); 
+        });
+        
+        // Handle Errors cleanly
+        socket.on('install_error', (msg) => {
+            showToast('Install Failed', msg, 'error');
+            if (typeof renderStoreGrid === 'function') renderStoreGrid();
+        });
+
+        // --- 4. Unified Navigation Engine ---
+        function getVisibleFocusables() {
+            const netOverlay = document.getElementById('network-chooser-overlay');
+            const themeOverlay = document.getElementById('theme-chooser-overlay');
+            const updateOverlay = document.getElementById('update-chooser-overlay');
+            const bluetoothOverlay = document.getElementById('bluetooth-chooser-overlay');
+            const usbOverlay = document.getElementById('usb-chooser-overlay');
+            const oskOverlay = document.getElementById('osk-overlay');
+            const gameOverlay = document.getElementById('web-game-overlay');
+            const historyOverlay = document.getElementById('browser-history-panel');
+            const mediaOverlay = document.getElementById('media-viewer-overlay');
+            const cameraOverlay = document.getElementById('camera-overlay');
+
+            let activeOverlay = null;
+            if (oskOverlay && !oskOverlay.classList.contains('hidden')) activeOverlay = oskOverlay;
+            else if (usbOverlay && !usbOverlay.classList.contains('hidden')) activeOverlay = usbOverlay;
+            else if (themeOverlay && !themeOverlay.classList.contains('hidden')) activeOverlay = themeOverlay;
+            else if (updateOverlay && updateOverlay.style.display === 'flex') activeOverlay = updateOverlay;
+            else if (netOverlay && !netOverlay.classList.contains('hidden')) activeOverlay = netOverlay;
+            else if (bluetoothOverlay && !bluetoothOverlay.classList.contains('hidden')) activeOverlay = bluetoothOverlay;
+            else if (cameraOverlay && !cameraOverlay.classList.contains('hidden')) activeOverlay = cameraOverlay;
+            else if (mediaOverlay && !mediaOverlay.classList.contains('hidden')) activeOverlay = mediaOverlay;
+            else if (historyOverlay && !historyOverlay.classList.contains('hidden')) activeOverlay = historyOverlay;
+            else if (gameOverlay && gameOverlay.style.display === 'flex') activeOverlay = gameOverlay;
+
+            let focusables = activeOverlay ? Array.from(activeOverlay.querySelectorAll('.focusable')) : Array.from(document.querySelectorAll('.focusable'));
+            return focusables.filter(el => el.closest('.hidden') === null && el.offsetWidth > 0 && el.offsetHeight > 0);
+        }
+
+        function moveFocus(direction) {
+            const current = document.activeElement;
+            if (current && current.querySelector('#sys-volume')) {
+                if (direction === 'Left' || direction === 'Right') {
+                    const slider = current.querySelector('#sys-volume');
+                    let val = parseInt(slider.value);
+                    val = direction === 'Right' ? Math.min(100, val + 5) : Math.max(0, val - 5);
+                    slider.value = val; socket.emit('set_volume', val);
+                    if (typeof playNavSound === 'function') playNavSound(); return; 
+                }
+            }
+
+            const focusables = getVisibleFocusables();
+            if (!focusables.length) return;
+            if (!current || !focusables.includes(current)) { focusables[0].focus(); return; }
+
+            const currentRect = current.getBoundingClientRect();
+            let bestMatch = null; let minDistance = Infinity;
+
+            focusables.forEach(target => {
+                if (target === current) return;
+                const tr = target.getBoundingClientRect();
+                const dx = (tr.left + tr.width / 2) - (currentRect.left + currentRect.width / 2);
+                const dy = (tr.top + tr.height / 2) - (currentRect.top + currentRect.height / 2);
+
+                if (direction === 'Up' && dy >= 0) return;
+                if (direction === 'Down' && dy <= 0) return;
+                if (direction === 'Left' && dx >= 0) return;
+                if (direction === 'Right' && dx <= 0) return;
+
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < minDistance) { minDistance = distance; bestMatch = target; }
+            });
+
+            if (bestMatch) { bestMatch.focus(); if (typeof playNavSound === 'function') playNavSound(); }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+            if (e.key === 'ArrowUp') moveFocus('Up'); if (e.key === 'ArrowDown') moveFocus('Down');
+            if (e.key === 'ArrowLeft') moveFocus('Left'); if (e.key === 'ArrowRight') moveFocus('Right');
+            if (e.key === 'Enter') { e.preventDefault(); if (document.activeElement) document.activeElement.click(); }
+        });
+
+        document.addEventListener('mouseover', (e) => { const focusable = e.target.closest('.focusable'); if (focusable && document.activeElement !== focusable) focusable.focus(); });
+
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        const virtualMouse = document.getElementById('virtual-mouse');
+
+        function simulateVirtualClick() {
+            if (typeof playSelectSound === 'function') playSelectSound();
+            const wvRect = browserWebview.getBoundingClientRect();
+            if (mouseX >= wvRect.left && mouseY >= wvRect.top && mouseX <= wvRect.right && mouseY <= wvRect.bottom) {
+                const relX = Math.round(mouseX - wvRect.left);
+                const relY = Math.round(mouseY - wvRect.top);
+                browserWebview.sendInputEvent({ type: 'mouseDown', x: relX, y: relY, button: 'left', clickCount: 1 });
+                setTimeout(() => { browserWebview.sendInputEvent({ type: 'mouseUp', x: relX, y: relY, button: 'left', clickCount: 1 }); }, 50);
+            } else {
+                const el = document.elementFromPoint(mouseX, mouseY);
+                if (el && el.closest('.focusable')) el.closest('.focusable').click();
+            }
+        }
+
+        let controllerLoopActive = false;
+        let lastInputTime = 0;
+        const INPUT_COOLDOWN = 200; 
+
+        function pollGamepad() {
+            const gamepads = navigator.getGamepads();
+            const gp = gamepads[0] || gamepads[1] || gamepads[2] || gamepads[3];
+            if (!gp) return requestAnimationFrame(pollGamepad);
+            
+            const now = Date.now();
+            const isBrowserOpen = document.getElementById('web-game-overlay').style.display === 'flex';
+
+            // Check if any button or stick is currently being used to reset the screensaver
+            let isGamepadActive = false;
+            for (let i = 0; i < gp.buttons.length; i++) { if (gp.buttons[i].pressed) isGamepadActive = true; }
+            for (let i = 0; i < gp.axes.length; i++) { if (Math.abs(gp.axes[i]) > 0.15) isGamepadActive = true; }
+            if (isGamepadActive) resetIdleTimer();
+
+            if (isBrowserOpen) {
+                virtualMouse.classList.remove('hidden');
+                const rsX = gp.axes[2] || 0; 
+                const rsY = gp.axes[3] || 0; 
+                const deadzone = 0.15;
+                let moveX = Math.abs(rsX) > deadzone ? rsX : 0;
+                let moveY = Math.abs(rsY) > deadzone ? rsY : 0;
+                
+                if (moveX !== 0 || moveY !== 0) {
+                    if (document.activeElement) document.activeElement.blur();
+                    document.getElementById('os-cursor').classList.add('opacity-0'); 
+                    mouseX += moveX * 18; 
+                    mouseY += moveY * 18;
+                    mouseX = Math.max(0, Math.min(window.innerWidth, mouseX));
+                    mouseY = Math.max(0, Math.min(window.innerHeight, mouseY));
+                    virtualMouse.style.left = mouseX + 'px';
+                    virtualMouse.style.top = mouseY + 'px';
+                    const wvRect = browserWebview.getBoundingClientRect();
+                    if (mouseX >= wvRect.left && mouseY >= wvRect.top && mouseX <= wvRect.right && mouseY <= wvRect.bottom) {
+                        browserWebview.sendInputEvent({ type: 'mouseMove', x: Math.round(mouseX - wvRect.left), y: Math.round(mouseY - wvRect.top) });
+                    }
+                }
+                if (!document.activeElement || !document.activeElement.classList.contains('focusable')) {
+                    const lsY = gp.axes[1] || 0;
+                    if (Math.abs(lsY) > deadzone) {
+                        const wvRect = browserWebview.getBoundingClientRect();
+                        browserWebview.sendInputEvent({ type: 'mouseWheel', x: Math.round(mouseX - wvRect.left), y: Math.round(mouseY - wvRect.top), deltaX: 0, deltaY: lsY * 40 });
+                    }
+                }
+            } else {
+                virtualMouse.classList.add('hidden');
+            }
+
+            if (now - lastInputTime > INPUT_COOLDOWN) {
+                let dpadUsed = false;
+                const useUiMode = !isBrowserOpen || (document.activeElement && document.activeElement.classList.contains('focusable'));
+
+                // X BUTTON (DELETE FILE)
+                if (gp.buttons[2]?.pressed) {
+                    const focused = document.activeElement;
+                    if (focused && focused.dataset.filepath) {
+                        playSelectSound();
+                        socket.emit('delete_file', focused.dataset.filepath);
+                        lastInputTime = now + 500;
+                    }
+                }
+
+                // Y BUTTON (EXPORT TO USB)
+                if (gp.buttons[3]?.pressed) {
+                    const focused = document.activeElement;
+                    if (focused && focused.dataset.filepath) {
+                        playSelectSound();
+                        fileToExport = focused.dataset.filepath;
+                        openUsbChooser();
+                        lastInputTime = now + 500;
+                    }
+                }
+
+                if (gp.buttons[12]?.pressed || (useUiMode && gp.axes[1] < -0.5)) { moveFocus('Up'); dpadUsed = true; }
+                else if (gp.buttons[13]?.pressed || (useUiMode && gp.axes[1] > 0.5)) { moveFocus('Down'); dpadUsed = true; }
+                else if (gp.buttons[14]?.pressed || gp.axes[0] < -0.5) { moveFocus('Left'); dpadUsed = true; }
+                else if (gp.buttons[15]?.pressed || gp.axes[0] > 0.5) { moveFocus('Right'); dpadUsed = true; }
+                if (dpadUsed) lastInputTime = now;
+
+                if (gp.buttons[0]?.pressed) {
+                    initAudio();
+                    if (isBrowserOpen && (!document.activeElement || !document.activeElement.classList.contains('focusable'))) {
+                        simulateVirtualClick(); 
+                    } else if (document.activeElement) {
+                        document.activeElement.click(); 
+                    }
+                    lastInputTime = now + 200;
+                }
+                
+                if (gp.buttons[1]?.pressed) {
+                    if (document.getElementById('osk-overlay').style.display === 'flex') closeOsk();
+                    else if (document.getElementById('usb-chooser-overlay') && !document.getElementById('usb-chooser-overlay').classList.contains('hidden')) closeUsbChooser();
+                    else if (document.getElementById('network-chooser-overlay').style.display === 'flex') closeNetworkChooser();
+                    else if (document.getElementById('bluetooth-chooser-overlay').style.display === 'flex') closeBluetoothChooser();
+                    else if (document.getElementById('camera-overlay') && !document.getElementById('camera-overlay').classList.contains('hidden')) closeCamera(); 
+                    else if (document.getElementById('media-viewer-overlay') && !document.getElementById('media-viewer-overlay').classList.contains('hidden')) closeMediaViewer(); 
+                    else if (document.getElementById('web-game-overlay').style.display === 'flex') closeWebGame();
+                    else if (document.getElementById('theme-chooser-overlay') && !document.getElementById('theme-chooser-overlay').classList.contains('hidden')) closeThemeChooser();
+                    else if (updateOverlay.style.display === 'flex') closeUpdateChooser();
+                    lastInputTime = now;
+                }
+            }
+            requestAnimationFrame(pollGamepad);
+        }
+        window.addEventListener("gamepadconnected", () => { pollGamepad(); });
+
+        const osCursor = document.getElementById('os-cursor');
+        function updateCursorPosition(el) {
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            osCursor.style.width = `${rect.width + 16}px`; osCursor.style.height = `${rect.height + 16}px`;
+            osCursor.style.top = `${rect.top - 8}px`; osCursor.style.left = `${rect.left - 8}px`;
+            osCursor.classList.remove('opacity-0'); osCursor.classList.add('opacity-100');
+        }
+        document.addEventListener('focusin', (e) => { if (e.target?.classList?.contains('focusable')) updateCursorPosition(e.target); });
+        document.getElementById('main-content').addEventListener('scroll', () => { if (document.activeElement?.classList.contains('focusable')) updateCursorPosition(document.activeElement); });
+        setTimeout(() => { const first = document.querySelector('.focusable'); if (first) first.focus(); }, 100);
+
+        // --- 5. System Sync & Toasts ---
+        function showToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let icon = 'fa-circle-info', colorClass = 'border-fuchsia-500 text-lime-400', shadow = 'shadow-[0_0_15px_rgba(217,70,239,0.3)]';
+            if (type === 'success') { icon = 'fa-circle-check'; colorClass = 'border-green-500 text-green-400'; shadow = 'shadow-[0_0_15px_rgba(34,197,94,0.3)]'; playSelectSound(); } 
+            else if (type === 'error') { icon = 'fa-circle-xmark'; colorClass = 'border-red-500 text-red-400'; shadow = 'shadow-[0_0_15px_rgba(239,68,68,0.3)]'; playBackSound(); }
+            toast.className = `bg-slate-900/90 backdrop-blur-md border-l-4 ${colorClass} p-4 rounded-r-xl flex items-start space-x-4 w-80 transform transition-all duration-300 translate-x-full opacity-0 ${shadow}`;
+            toast.innerHTML = `<i class="fa-solid ${icon} mt-1 text-xl"></i><div><h4 class="font-bold text-white text-sm tracking-wide uppercase">${title}</h4><p class="text-xs text-gray-400 mt-1">${message}</p></div>`;
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.remove('translate-x-full', 'opacity-0'));
+            setTimeout(() => { toast.classList.add('translate-x-full', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 5000);
+        }
+
+        socket.emit('get_network');
+        socket.on('network_status', (statusStr) => { document.getElementById('ui-network-name').textContent = statusStr; });
+        socket.on('wifi_connect_result', (res) => {
+            document.getElementById('osk-title').textContent = `Password for: ${targetSsid}`;
+            if (res.success) { showToast('Connected', `Successfully joined ${targetSsid}`, 'success'); closeOsk(); socket.emit('get_network'); } 
+            else { 
+                showToast('Connection Failed', res.error, 'error'); 
+                const mask = document.getElementById('osk-mask').parentElement;
+                mask.classList.add('translate-x-2'); setTimeout(() => mask.classList.remove('translate-x-2'), 100); setTimeout(() => mask.classList.add('-translate-x-2'), 200); setTimeout(() => mask.classList.remove('-translate-x-2'), 300);
+            }
+        });
+        document.getElementById('sys-volume').addEventListener('input', (e) => socket.emit('set_volume', e.target.value));
+
+        // --- 6. Universal OSK Logic ---
+        const oskOverlay = document.getElementById('osk-overlay'); const oskMask = document.getElementById('osk-mask'); const oskContainer = document.getElementById('osk-keyboard-container');
+        let currentOskValue = "", targetSsid = "", currentLayout = 'lower', isOskPassword = false, oskSubmitCallback = null;
+        const layouts = { lower: [['1','2','3','4','5','6','7','8','9','0'],['q','w','e','r','t','y','u','i','o','p'],['a','s','d','f','g','h','j','k','l'],['SHIFT','z','x','c','v','b','n','m','BACK'],['?123','SPACE','.','-','_']], upper: [['1','2','3','4','5','6','7','8','9','0'],['Q','W','E','R','T','Y','U','I','O','P'],['A','S','D','F','G','H','J','K','L'],['SHIFT','Z','X','C','V','B','N','M','BACK'],['?123','SPACE','.','-','_']], symbols: [['!','@','#','$','%','^','&','*','(',')'],['~','`','|','•','√','π','÷','×','{','}'],['+','=','[',']','<','>','/','\\',':',';'],['ABC','\'','"',',','.','?','!','','BACK'],['ABC','SPACE','.','-','_']] };
+
+        function renderKeyboard() {
+            oskContainer.innerHTML = ''; 
+            layouts[currentLayout].forEach(row => {
+                const rowDiv = document.createElement('div'); rowDiv.className = 'flex justify-center space-x-2';
+                row.forEach(key => {
+                    if (key === '') { rowDiv.appendChild(Object.assign(document.createElement('div'), { className: 'w-16' })); return; }
+                    const btn = document.createElement('button');
+                    let widthClass = 'w-16', bgClass = 'bg-slate-800';
+                    if (['BACK', 'SHIFT', '?123', 'ABC'].includes(key)) { widthClass = 'w-32'; bgClass = 'bg-slate-700 text-lime-400'; } 
+                    else if (key === 'SPACE') { widthClass = 'w-64'; bgClass = 'bg-slate-700'; }
+                    btn.className = `focusable ${widthClass} ${bgClass} hover:bg-fuchsia-600 text-white font-bold py-4 rounded-xl text-xl border border-white/5`;
+                    btn.tabIndex = 0; btn.textContent = key === 'SPACE' ? ' ' : key;
+                    btn.addEventListener('click', () => handleOskInput(key)); btn.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleOskInput(key); });
+                    rowDiv.appendChild(btn);
+                });
+                oskContainer.appendChild(rowDiv);
+            });
+        }
+
+        function updateOskDisplay() { 
+            oskMask.textContent = isOskPassword ? '*'.repeat(currentOskValue.length) : currentOskValue; 
+            const container = document.getElementById('osk-scroll-container');
+            if (container) { container.scrollLeft = container.scrollWidth; }
+        }
+        
+        function handleOskInput(key) {
+            playNavSound();
+            if (key === 'SHIFT') { currentLayout = currentLayout === 'lower' ? 'upper' : 'lower'; return renderKeyboard(); } 
+            else if (key === '?123') { currentLayout = 'symbols'; return renderKeyboard(); } 
+            else if (key === 'ABC') { currentLayout = 'lower'; return renderKeyboard(); } 
+            if (key === 'BACK') currentOskValue = currentOskValue.slice(0, -1);
+            else if (key === 'SPACE') currentOskValue += ' ';
+            else { currentOskValue += key; if (currentLayout === 'upper') { currentLayout = 'lower'; renderKeyboard(); } }
+            updateOskDisplay();
+        }
+
+        function openOsk(title, isPassword = false, initialValue = "", callback) {
+            playSelectSound(); isOskPassword = isPassword; oskSubmitCallback = callback; currentOskValue = initialValue;
+            document.getElementById('osk-title').textContent = title; updateOskDisplay();
+            currentLayout = 'lower'; renderKeyboard();
+            oskOverlay.classList.remove('hidden', 'opacity-0'); oskOverlay.classList.add('opacity-100'); oskOverlay.style.display = 'flex';
+            setTimeout(() => oskContainer.querySelector('.focusable')?.focus(), 100);
+        }
+
+        function closeOsk() {
+            playBackSound(); oskOverlay.classList.remove('opacity-100'); oskOverlay.classList.add('opacity-0');
+            setTimeout(() => { oskOverlay.style.display = 'none'; oskOverlay.classList.add('hidden'); document.querySelector('.view-section:not(.hidden) .focused')?.focus(); }, 300);
+        }
+        function submitOsk() { playSelectSound(); if (oskSubmitCallback) oskSubmitCallback(currentOskValue); }
+
+        // --- 7. Network Chooser ---
+        const networkChooserOverlay = document.getElementById('network-chooser-overlay'); const networkListContainer = document.getElementById('network-list-container');
+        function openNetworkChooser() {
+            playSelectSound(); networkChooserOverlay.classList.remove('hidden', 'opacity-0'); networkChooserOverlay.classList.add('opacity-100'); networkChooserOverlay.style.display = 'flex';
+            networkListContainer.innerHTML = '<div class="text-center text-gray-500 py-8 font-mono">Scanning nearby frequencies...</div>'; document.getElementById('network-scan-spinner').classList.remove('hidden');
+            setTimeout(() => networkChooserOverlay.querySelector('button')?.focus(), 100); socket.emit('scan_wifi');
+        }
+        function closeNetworkChooser() {
+            playBackSound(); networkChooserOverlay.classList.remove('opacity-100'); networkChooserOverlay.classList.add('opacity-0');
+            setTimeout(() => { networkChooserOverlay.style.display = 'none'; networkChooserOverlay.classList.add('hidden'); document.querySelector('[onclick="openNetworkChooser()"]').focus(); }, 300);
+        }
+        socket.on('wifi_scan_results', (networks) => {
+            document.getElementById('network-scan-spinner').classList.add('hidden'); networkListContainer.innerHTML = '';
+            if (networks.length === 0) { networkListContainer.innerHTML = '<div class="text-center text-red-400 py-8 font-bold">No networks found.</div>'; return setTimeout(() => networkChooserOverlay.querySelector('button')?.focus(), 100); }
+            networks.forEach(net => {
+                const btn = document.createElement('button'); btn.className = 'focusable w-full bg-white/5 hover:bg-fuchsia-600 border border-white/10 rounded-xl p-4 flex justify-between items-center transition-colors text-left'; btn.tabIndex = 0;
+                btn.innerHTML = `<div class="flex items-center"><span class="font-bold text-lg">${net.ssid}</span>${net.security ? '<i class="fa-solid fa-lock text-xs text-gray-400 ml-2"></i>' : ''}</div><div class="flex items-center space-x-3"><span class="text-xs text-gray-400 font-mono">${net.signal}%</span><i class="fa-solid ${net.signal < 40 ? 'fa-wifi text-gray-600' : (net.signal < 70 ? 'fa-wifi text-gray-400' : 'fa-wifi')}"></i></div>`;
+                btn.addEventListener('click', () => {
+                    closeNetworkChooser(); setTimeout(() => {
+                        openOsk(`Password for: ${net.ssid}`, true, "", (password) => {
+                            document.getElementById('osk-title').innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-lime-400 mr-2"></i>Connecting...`;
+                            targetSsid = net.ssid; socket.emit('connect_wifi', { ssid: net.ssid, password: password });
+                        });
+                    }, 350); 
+                });
+                btn.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); }); networkListContainer.appendChild(btn);
+            });
+            setTimeout(() => networkListContainer.querySelector('.focusable')?.focus(), 100);
+        });
+
+        // --- BLUETOOTH CHOOSER ---
+        const bluetoothChooserOverlay = document.getElementById('bluetooth-chooser-overlay'); 
+        const bluetoothListContainer = document.getElementById('bluetooth-list-container');
+        
+        socket.emit('get_bluetooth_status');
+        socket.on('bluetooth_status', (status) => { document.getElementById('ui-bluetooth-status').textContent = status; });
+
+        function openBluetoothChooser() {
+            playSelectSound(); 
+            bluetoothChooserOverlay.classList.remove('hidden', 'opacity-0'); 
+            bluetoothChooserOverlay.classList.add('opacity-100'); 
+            bluetoothChooserOverlay.style.display = 'flex';
+            
+            bluetoothListContainer.innerHTML = '<div class="text-center text-gray-500 py-8 font-mono">Scanning frequencies (takes ~5s)...</div>'; 
+            document.getElementById('bluetooth-scan-spinner').classList.remove('hidden');
+            
+            setTimeout(() => bluetoothChooserOverlay.querySelector('button')?.focus(), 100); 
+            socket.emit('scan_bluetooth');
+        }
+
+        function closeBluetoothChooser() {
+            playBackSound(); 
+            bluetoothChooserOverlay.classList.remove('opacity-100'); 
+            bluetoothChooserOverlay.classList.add('opacity-0');
+            setTimeout(() => { 
+                bluetoothChooserOverlay.style.display = 'none'; 
+                bluetoothChooserOverlay.classList.add('hidden'); 
+                document.querySelector('[onclick="openBluetoothChooser()"]').focus(); 
+            }, 300);
+        }
+
+        socket.on('bluetooth_scan_results', (devices) => {
+            document.getElementById('bluetooth-scan-spinner').classList.add('hidden'); 
+            bluetoothListContainer.innerHTML = '';
+            
+            if (devices.length === 0) { 
+                bluetoothListContainer.innerHTML = '<div class="text-center text-red-400 py-8 font-bold">No devices found. Ensure device is in pairing mode.</div>'; 
+                return setTimeout(() => bluetoothChooserOverlay.querySelector('button')?.focus(), 100); 
+            }
+            
+            devices.forEach(dev => {
+                const btn = document.createElement('button'); 
+                btn.className = 'focusable w-full bg-white/5 hover:bg-fuchsia-600 border border-white/10 rounded-xl p-4 flex justify-between items-center transition-colors text-left group'; 
+                btn.tabIndex = 0;
+                
+                btn.innerHTML = `
+                    <div class="flex items-center"><i class="fa-brands fa-bluetooth text-fuchsia-500 mr-4 group-hover:text-white"></i><span class="font-bold text-lg truncate w-64">${dev.name}</span></div>
+                    <div class="flex items-center space-x-3"><span class="text-xs text-gray-400 font-mono">${dev.mac}</span></div>
+                `;
+                
+                btn.addEventListener('click', () => {
+                    playSelectSound();
+                    btn.innerHTML = `<div class="flex items-center w-full justify-center text-sky-300 font-bold"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Pairing...</div>`;
+                    socket.emit('connect_bluetooth', dev.mac);
+                });
+                btn.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); }); 
+                bluetoothListContainer.appendChild(btn);
+            });
+            setTimeout(() => bluetoothListContainer.querySelector('.focusable')?.focus(), 100);
+        });
+
+        socket.on('bluetooth_connect_result', (res) => {
+            if (res.success) {
+                showToast('Bluetooth Paired', 'Device successfully connected', 'success');
+                closeBluetoothChooser();
+                socket.emit('get_bluetooth_status');
+            } else {
+                showToast('Bluetooth Error', res.error, 'error');
+                closeBluetoothChooser();
+            }
+        });
+
+        // --- 8. Native Browser Engine ---
+        const browserUrlText = document.getElementById('browser-url-text'); 
+        const browserHistoryPanel = document.getElementById('browser-history-panel'); 
+        const browserHistoryList = document.getElementById('browser-history-list');
+        let sessionHistory = [];
+
+        socket.emit('get_preload_path');
+        socket.on('receive_preload_path', (fullPath) => {
+            browserWebview.setAttribute('preload', fullPath);
+        });
+
+        browserWebview.addEventListener('did-navigate', (e) => { browserUrlText.textContent = e.url; addToHistory(e.url); });
+        browserWebview.addEventListener('did-navigate-in-page', (e) => { browserUrlText.textContent = e.url; });
+        browserWebview.addEventListener('page-title-updated', (e) => { if(sessionHistory.length > 0 && sessionHistory[0].url === browserWebview.getURL()) sessionHistory[0].title = e.title; });
+
+        browserWebview.addEventListener('ipc-message', (event) => {
+            if (event.channel === 'open-web-osk') {
+                const { title, isPassword, initialValue } = event.args[0];
+                openOsk(`Web: ${title}`, isPassword, initialValue, (input) => {
+                    closeOsk();
+                    browserWebview.send('insert-web-text', input);
+                });
+            }
+        });
+
+        document.getElementById('browser-back').addEventListener('click', () => { if(browserWebview.canGoBack()) browserWebview.goBack(); });
+        document.getElementById('browser-forward').addEventListener('click', () => { if(browserWebview.canGoForward()) browserWebview.goForward(); });
+        document.getElementById('browser-refresh').addEventListener('click', () => { browserWebview.reload(); });
+
+        document.getElementById('browser-address-bar').addEventListener('click', () => {
+            openOsk("Enter URL or Search", false, browserWebview.getURL() || "", (input) => {
+                closeOsk(); if (!input.trim()) return;
+                let urlToLoad = input.trim();
+                if (!urlToLoad.startsWith('http://') && !urlToLoad.startsWith('https://')) { urlToLoad = (urlToLoad.includes('.') && !urlToLoad.includes(' ')) ? 'https://' + urlToLoad : 'https://www.google.com/search?q=' + encodeURIComponent(urlToLoad); }
+                browserWebview.src = urlToLoad; browserUrlText.textContent = "Loading...";
+            });
+        });
+
+        function addToHistory(url) {
+            if (sessionHistory.length > 0 && sessionHistory[0].url === url) return; 
+            sessionHistory.unshift({ url: url, title: url }); if (sessionHistory.length > 50) sessionHistory.pop(); 
+        }
+
+        function toggleBrowserHistory() {
+            if (browserHistoryPanel.classList.contains('hidden')) {
+                browserHistoryPanel.classList.remove('hidden'); browserHistoryPanel.style.display = 'flex';
+                browserHistoryList.innerHTML = sessionHistory.length === 0 ? '<div class="text-gray-500 text-center p-8 font-mono text-sm">Session history is empty</div>' : '';
+                sessionHistory.forEach(item => {
+                    const btn = document.createElement('button'); btn.className = 'focusable w-full text-left p-4 hover:bg-slate-700 rounded-xl flex flex-col border border-transparent hover:border-slate-600 mb-2'; btn.tabIndex = 0;
+                    btn.innerHTML = `<span class="text-white font-bold truncate w-full">${item.title}</span><span class="text-lime-400 text-xs truncate w-full mt-1 font-mono">${item.url}</span>`;
+                    btn.addEventListener('click', () => { browserWebview.src = item.url; toggleBrowserHistory(); });
+                    btn.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); }); browserHistoryList.appendChild(btn);
+                });
+                setTimeout(() => browserHistoryList.querySelector('.focusable')?.focus(), 100);
+            } else {
+                browserHistoryPanel.classList.add('hidden'); browserHistoryPanel.style.display = 'none'; document.getElementById('browser-history-btn').focus();
+            }
+        }
+    </script>
+</body>
+</html>

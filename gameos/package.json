@@ -1,0 +1,17 @@
+{
+  "name": "gameos",
+  "version": "1.0.0",
+  "description": "Custom Gaming Kiosk OS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}
