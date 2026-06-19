@@ -110,7 +110,7 @@ io.on('connection', (socket) => {
     socket.on('check_update', () => {
         console.log('[SYSTEM] Checking cloud for OS updates...');
         // CHANGE THIS URL TO YOUR GITHUB PAGES URL
-        const versionUrl = 'https://justindavis882.github.io/gameZONE/version.json';
+        const versionUrl = 'https://raw.githubusercontent.com/justindavis882/gameZONE/main/version.json';
         
         https.get(versionUrl, (res) => {
             let data = '';
