@@ -10,8 +10,9 @@ const https = require('https');
 
 // Define the current local version of the OS
 const CURRENT_OS_VERSION = "1.1.3";
-// Updated location for recent.png. Should fix not appearing on some consoles.
-// 
+// Updated location for recent.png. Should fix not appearing on some consoles
+// Eliminate the white flash of Electron
+//
 
 // --- 1. BOOT THE BACKEND SERVER ---
 const expressApp = express();
@@ -492,6 +493,8 @@ app.whenReady().then(() => {
         height: 1080,
         fullscreen: true,
         frame: false,
+        backgroundColor: '#000000',
+        show: false,
         webPreferences: {
             nodeIntegration: true,
             webviewTag: true,
